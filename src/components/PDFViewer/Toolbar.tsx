@@ -5,7 +5,8 @@ import {
   Search, Sun, Moon, Download, Upload,
   ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
   Maximize, MousePointer2, Type, Highlighter, Underline as UnderlineIcon,
-  Printer, Info, Hand, Layout, LayoutPanelTop, PanelsTopLeft, ChevronDown
+  Printer, Info, Hand, Layout, LayoutPanelTop, PanelsTopLeft, ChevronDown,
+  MoreHorizontal
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { PDFState } from '../../types';
@@ -38,7 +39,9 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   searchEnabled = true
 }) => {
   const [isZoomMenuOpen, setIsZoomMenuOpen] = useState(false);
+  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const zoomMenuRef = useRef<HTMLDivElement>(null);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
 
   const zoomOptions = [
     { label: '50%', value: '0.5' },
@@ -59,6 +62,9 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     const handleClickOutside = (event: MouseEvent) => {
       if (zoomMenuRef.current && !zoomMenuRef.current.contains(event.target as Node)) {
         setIsZoomMenuOpen(false);
+      }
+      if (moreMenuRef.current && !moreMenuRef.current.contains(event.target as Node)) {
+        setIsMoreMenuOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -85,21 +91,21 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
   return (
     <div className={cn(
-      "h-14 border-b flex items-center justify-between px-6 sticky top-0 z-50 transition-colors duration-300 overflow-x-auto no-scrollbar",
+      "h-14 border-b flex items-center justify-between px-6 sticky top-0 z-50 transition-colors duration-300",
       state.isDarkMode ? "bg-[#1E293B] border-slate-700/50" : "bg-white border-slate-200 shadow-sm"
     )}>
       <div className="flex items-center gap-4 shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-blue-500 rounded flex items-center justify-center font-bold text-white shadow-lg shadow-blue-500/20">N</div>
           <span className={cn(
-            "font-semibold tracking-tight hidden sm:inline",
+            "font-semibold tracking-tight hidden md:inline",
             state.isDarkMode ? "text-white" : "text-slate-900"
           )}>
             NexusPDF <span className="text-[10px] text-slate-400 font-mono ml-1">v2.5.0</span>
           </span>
         </div>
         
-        <div className={cn("h-6 w-[1px] mx-2", state.isDarkMode ? "bg-slate-700/50" : "bg-slate-200")} />
+        <div className={cn("h-6 w-[1px] mx-2 hidden sm:block", state.isDarkMode ? "bg-slate-700/50" : "bg-slate-200")} />
         
         <div className={cn(
           "flex items-center gap-1 p-1 rounded-lg border",
@@ -132,7 +138,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
       </div>
 
       <div className={cn(
-        "flex items-center gap-1 p-1 rounded-lg border shrink-0 mx-4",
+        "hidden lg:flex items-center gap-1 p-1 rounded-lg border shrink-0 mx-4",
         state.isDarkMode ? "bg-slate-800/50 border-slate-700/50" : "bg-slate-100 border-slate-200"
       )}>
         {tools.map((tool) => (
@@ -148,14 +154,14 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             title={tool.label}
           >
             <tool.icon size={14} />
-            <span className="hidden lg:inline">{tool.label}</span>
+            <span className="hidden xl:inline">{tool.label}</span>
           </button>
         ))}
       </div>
 
       <div className="flex items-center gap-3 shrink-0">
         <div className={cn(
-          "hidden md:flex items-center gap-0.5 rounded p-1 border transition-colors",
+          "hidden sm:flex items-center gap-0.5 rounded p-1 border transition-colors",
           state.isDarkMode ? "bg-slate-800 border-slate-700 text-slate-400" : "bg-slate-100 border-slate-200 text-slate-500"
         )}>
           <button 
@@ -181,7 +187,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             <ChevronLeft size={16} />
           </button>
           
-          <div className="flex items-center px-2 min-w-[80px] justify-center">
+          <div className="flex items-center px-1 min-w-[60px] md:min-w-[80px] justify-center">
              <input 
               type="text"
               value={state.currentPage}
@@ -224,10 +230,10 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           </button>
         </div>
 
-        <div className={cn("h-6 w-[1px] mx-1 hidden sm:block", state.isDarkMode ? "bg-slate-700/50" : "bg-slate-200")} />
+        <div className={cn("h-6 w-[1px] mx-1 hidden xl:block", state.isDarkMode ? "bg-slate-700/50" : "bg-slate-200")} />
 
         <div className={cn(
-          "flex items-center gap-1 p-1 rounded border",
+          "hidden md:flex items-center gap-1 p-1 rounded border",
           state.isDarkMode ? "bg-slate-800 border-slate-700" : "bg-slate-100 border-slate-200 transition-colors"
         )}>
           <button 
@@ -306,7 +312,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         <div className={cn("h-6 w-[1px] mx-1 hidden lg:block", state.isDarkMode ? "bg-slate-700/50" : "bg-slate-200")} />
 
         <div className={cn(
-          "flex items-center gap-1 p-1 rounded border",
+          "hidden xl:flex items-center gap-1 p-1 rounded border",
           state.isDarkMode ? "bg-slate-800 border-slate-700" : "bg-slate-100 border-slate-200 transition-colors"
         )}>
           <button 
@@ -349,7 +355,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
         <div className={cn("h-6 w-[1px] mx-1 hidden lg:block", state.isDarkMode ? "bg-slate-700/50" : "bg-slate-200")} />
 
-        <div className="flex items-center gap-1">
+        <div className="hidden lg:flex items-center gap-1">
           <button 
             onClick={() => onStateChange({ rotation: (state.rotation + 90) % 360 })}
             className={cn(
@@ -412,16 +418,159 @@ export const Toolbar: React.FC<ToolbarProps> = ({
               <Search size={18} />
             </button>
           )}
-          
-          {allowUpload && (
-            <button 
-              onClick={onUpload}
-              className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded text-xs font-semibold shadow-lg shadow-blue-600/20 transition-all active:scale-95 flex items-center gap-2 ml-2"
-            >
-              <Upload size={14} />
-              <span className="hidden sm:inline">Upload</span>
-            </button>
-          )}
+        </div>
+
+        {allowUpload && (
+          <button 
+            onClick={onUpload}
+            className="hidden sm:flex bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded text-xs font-semibold shadow-lg shadow-blue-600/20 transition-all active:scale-95 items-center gap-2"
+          >
+            <Upload size={14} />
+            <span className="hidden sm:inline">Upload</span>
+          </button>
+        )}
+
+        <div className="relative" ref={moreMenuRef}>
+          <button 
+            onClick={() => setIsMoreMenuOpen(!isMoreMenuOpen)}
+            className={cn(
+              "p-2 rounded transition-all lg:hidden",
+              state.isDarkMode ? "text-slate-400 hover:bg-slate-700 hover:text-white" : "text-slate-500 hover:bg-slate-100"
+            )}
+            title="More Options"
+          >
+            <MoreHorizontal size={18} />
+          </button>
+
+          <AnimatePresence>
+            {isMoreMenuOpen && (
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                className={cn(
+                  "absolute top-full right-0 mt-2 w-56 border rounded-xl shadow-2xl overflow-hidden z-[60] py-1",
+                  state.isDarkMode ? "bg-slate-900 border-slate-700" : "bg-white border-slate-200"
+                )}
+              >
+                <div className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest border-b border-slate-700/50 mb-1 lg:hidden">
+                  Tools & Actions
+                </div>
+                
+                {/* Tools - Visible in dropdown when bar is small */}
+                <div className="lg:hidden px-1 space-y-0.5">
+                   {tools.map((tool) => (
+                    <button
+                      key={tool.id}
+                      onClick={() => {
+                        onStateChange({ activeTool: tool.id as any });
+                        setIsMoreMenuOpen(false);
+                      }}
+                      className={cn(
+                        "w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-colors flex items-center gap-2",
+                        state.activeTool === tool.id 
+                          ? (state.isDarkMode ? "bg-blue-600/20 text-blue-400" : "bg-blue-50 text-blue-600") 
+                          : (state.isDarkMode ? "text-slate-400 hover:bg-slate-800 hover:text-white" : "text-slate-600 hover:bg-slate-100")
+                      )}
+                    >
+                      <tool.icon size={14} />
+                      {tool.label}
+                    </button>
+                  ))}
+                  <div className="h-px bg-slate-700/50 my-1 xl:hidden" />
+                </div>
+
+                {/* View Modes - XL hidden */}
+                <div className="xl:hidden px-1 space-y-0.5">
+                  <button 
+                    onClick={() => { onStateChange({ viewMode: 'single' }); setIsMoreMenuOpen(false); }}
+                    className={cn(
+                      "w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-colors flex items-center gap-2",
+                      state.viewMode === 'single' ? "text-blue-500" : (state.isDarkMode ? "text-slate-400 hover:bg-slate-800" : "text-slate-600 hover:bg-slate-100")
+                    )}
+                  >
+                    <LayoutPanelTop size={14} /> Single Page
+                  </button>
+                  <button 
+                    onClick={() => { onStateChange({ viewMode: 'double' }); setIsMoreMenuOpen(false); }}
+                    className={cn(
+                      "w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-colors flex items-center gap-2",
+                      state.viewMode === 'double' ? "text-blue-500" : (state.isDarkMode ? "text-slate-400 hover:bg-slate-800" : "text-slate-600 hover:bg-slate-100")
+                    )}
+                  >
+                    <PanelsTopLeft size={14} /> Two Pages
+                  </button>
+                  <button 
+                    onClick={() => { onStateChange({ viewMode: 'continuous' }); setIsMoreMenuOpen(false); }}
+                    className={cn(
+                      "w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-colors flex items-center gap-2",
+                      state.viewMode === 'continuous' ? "text-blue-500" : (state.isDarkMode ? "text-slate-400 hover:bg-slate-800" : "text-slate-600 hover:bg-slate-100")
+                    )}
+                  >
+                    <Layout size={14} /> Continuous
+                  </button>
+                  <div className="h-px bg-slate-700/50 my-1" />
+                </div>
+
+                {/* Regular Actions */}
+                <div className="px-1 space-y-0.5">
+                  <button 
+                    onClick={() => { onStateChange({ rotation: (state.rotation + 90) % 360 }); setIsMoreMenuOpen(false); }}
+                    className={cn(
+                      "w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-colors flex items-center gap-2",
+                      state.isDarkMode ? "text-slate-400 hover:bg-slate-800 hover:text-white" : "text-slate-600 hover:bg-slate-100"
+                    )}
+                  >
+                    <RotateCw size={14} /> Rotate Page
+                  </button>
+                  <button 
+                    onClick={() => { onPrint(); setIsMoreMenuOpen(false); }}
+                    className={cn(
+                      "w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-colors flex items-center gap-2",
+                      state.isDarkMode ? "text-slate-400 hover:bg-slate-800 hover:text-white" : "text-slate-600 hover:bg-slate-100"
+                    )}
+                  >
+                    <Printer size={14} /> Print
+                  </button>
+                  <button 
+                    onClick={() => { onDownload(); setIsMoreMenuOpen(false); }}
+                    className={cn(
+                      "w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-colors flex items-center gap-2",
+                      state.isDarkMode ? "text-slate-400 hover:bg-slate-800 hover:text-white" : "text-slate-600 hover:bg-slate-100"
+                    )}
+                  >
+                    <Download size={14} /> Download
+                  </button>
+                  <button 
+                    onClick={() => { onShowInfo(); setIsMoreMenuOpen(false); }}
+                    className={cn(
+                      "w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-colors flex items-center gap-2",
+                      state.isDarkMode ? "text-slate-400 hover:bg-slate-800 hover:text-white" : "text-slate-600 hover:bg-slate-100"
+                    )}
+                  >
+                    <Info size={14} /> Properties
+                  </button>
+                  <button 
+                    onClick={() => { onToggleFullScreen(); setIsMoreMenuOpen(false); }}
+                    className={cn(
+                      "w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition-colors flex items-center gap-2",
+                      state.isDarkMode ? "text-slate-400 hover:bg-slate-800 hover:text-white" : "text-slate-600 hover:bg-slate-100"
+                    )}
+                  >
+                    <Maximize size={14} /> Fullscreen
+                  </button>
+                  {allowUpload && (
+                    <button 
+                      onClick={() => { onUpload(); setIsMoreMenuOpen(false); }}
+                      className="w-full text-left px-3 py-2 rounded-lg text-xs font-bold text-blue-500 hover:bg-blue-50 transition-colors flex items-center gap-2 sm:hidden"
+                    >
+                      <Upload size={14} /> Upload PDF
+                    </button>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
     </div>
