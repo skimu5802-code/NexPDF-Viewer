@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 // @ts-ignore
 import pdfjsWorker from 'pdfjs-dist/legacy/build/pdf.worker.mjs?url';
 import { cn } from '../../lib/utils';
-import { Annotation } from '../../types';
+import { Annotation, AnnotationType } from '../../types';
 import { MessageSquare, Trash2 } from 'lucide-react';
 
 // Set up the worker accurately for Vite environment
@@ -19,7 +19,8 @@ interface PageRendererProps {
   isDarkMode: boolean;
   annotations: Annotation[];
   activeTool: string;
-  onAddAnnotation: (page: number, x: number, y: number, w?: number, h?: number) => void;
+  highlightColor: string;
+  onAddAnnotation: (page: number, x: number, y: number, w?: number, h?: number, type?: AnnotationType, path?: { x: number; y: number }[]) => void;
   onRemoveAnnotation: (id: string) => void;
   onContextMenu: (e: React.MouseEvent, page: number, x: number, y: number, annotationId?: string) => void;
   onPageVisible: (page: number) => void;
@@ -34,6 +35,7 @@ export const PageRenderer: React.FC<PageRendererProps> = ({
   isDarkMode,
   annotations,
   activeTool,
+  highlightColor,
   onAddAnnotation,
   onRemoveAnnotation,
   onContextMenu,
@@ -126,9 +128,10 @@ export const PageRenderer: React.FC<PageRendererProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [dragEnd, setDragEnd] = useState({ x: 0, y: 0 });
+  const [currentPath, setCurrentPath] = useState<{ x: number; y: number }[]>([]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (activeTool === 'view') return;
+    if (activeTool === 'view' || activeTool === 'hand') return;
     if (!canvasRef.current || e.button !== 0) return;
     
     const rect = canvasRef.current.getBoundingClientRect();
@@ -138,6 +141,10 @@ export const PageRenderer: React.FC<PageRendererProps> = ({
     setDragStart({ x, y });
     setDragEnd({ x, y });
     setIsDragging(true);
+
+    if (activeTool === 'draw') {
+      setCurrentPath([{ x, y }]);
+    }
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
@@ -148,6 +155,10 @@ export const PageRenderer: React.FC<PageRendererProps> = ({
     const y = (e.clientY - rect.top) / zoom;
     
     setDragEnd({ x, y });
+
+    if (activeTool === 'draw') {
+      setCurrentPath(prev => [...prev, { x, y }]);
+    }
   };
 
   const handleMouseUp = (e: React.MouseEvent) => {
@@ -163,13 +174,27 @@ export const PageRenderer: React.FC<PageRendererProps> = ({
     const x = Math.min(dragStart.x, endX);
     const y = Math.min(dragStart.y, endY);
 
+    if (activeTool === 'draw') {
+      if (currentPath.length > 2) {
+        // Calculate bounding box for 'draw'
+        const minX = Math.min(...currentPath.map(p => p.x));
+        const maxX = Math.max(...currentPath.map(p => p.x));
+        const minY = Math.min(...currentPath.map(p => p.y));
+        const maxY = Math.max(...currentPath.map(p => p.y));
+        
+        onAddAnnotation(pageNumber, minX, minY, maxX - minX, maxY - minY, 'draw', currentPath);
+      }
+      setCurrentPath([]);
+      return;
+    }
+
     if (w < 5 && h < 5) {
       if (activeTool === 'note') {
-        onAddAnnotation(pageNumber, x, y);
+        onAddAnnotation(pageNumber, x, y, undefined, undefined, 'note');
       }
     } else if (w > 5 || h > 5) {
-      if (activeTool !== 'view') {
-         onAddAnnotation(pageNumber, x, y, w, h); 
+      if (activeTool !== 'view' && activeTool !== 'hand') {
+         onAddAnnotation(pageNumber, x, y, w, h, activeTool as AnnotationType); 
       }
     }
   };
@@ -232,7 +257,40 @@ export const PageRenderer: React.FC<PageRendererProps> = ({
                height: (rect.h * zoom),
                backgroundColor: ann.type === 'highlight' ? ann.color : 'transparent',
                borderBottom: ann.type === 'underline' ? `2px solid ${ann.color}` : 'none',
+               border: (ann.type === 'box' || ann.type === 'circle') ? `2px solid ${ann.color}` : 'none',
+               borderRadius: ann.type === 'circle' ? '100%' : 'none',
              };
+
+             if (ann.type === 'draw' && ann.path) {
+               return (
+                 <div 
+                   key={ann.id}
+                   className="absolute z-20 pointer-events-auto group/ann"
+                   onContextMenu={(e) => {
+                      e.stopPropagation();
+                      onContextMenu(e, pageNumber, rect.x, rect.y, ann.id);
+                   }}
+                 >
+                   <svg className="absolute overflow-visible pointer-events-none" style={{ left: 0, top: 0 }}>
+                     <polyline
+                       points={ann.path.map(p => `${p.x * zoom},${p.y * zoom}`).join(' ')}
+                       fill="none"
+                       stroke={ann.color}
+                       strokeWidth="2"
+                       strokeLinecap="round"
+                       strokeLinejoin="round"
+                     />
+                   </svg>
+                   <button 
+                    onClick={() => onRemoveAnnotation(ann.id)}
+                    className="absolute bg-slate-900 text-white p-1 rounded shadow-lg opacity-0 group-hover/ann:opacity-100 transition-all whitespace-nowrap flex items-center gap-1 z-30 pointer-events-auto -translate-y-full"
+                    style={{ left: (rect.x * zoom), top: (rect.y * zoom) }}
+                  >
+                    <Trash2 size={10} className="text-red-400" />
+                  </button>
+                 </div>
+               );
+             }
 
              if (ann.type === 'note') {
                return (
@@ -293,7 +351,7 @@ export const PageRenderer: React.FC<PageRendererProps> = ({
                  }}
                  style={{
                    ...style,
-                   backgroundColor: ann.type === 'highlight' ? 'rgba(255, 255, 0, 0.7)' : style.backgroundColor, 
+                   backgroundColor: ann.type === 'highlight' ? ann.color : style.backgroundColor, 
                  }}
                 >
                   <button 
@@ -308,21 +366,40 @@ export const PageRenderer: React.FC<PageRendererProps> = ({
           })}
 
           {/* Dragging Preview */}
-          {isDragging && activeTool !== 'view' && (
-            <div 
-              className={cn(
-                "absolute",
-                activeTool === 'highlight' ? "bg-yellow-400/60 mix-blend-multiply rounded-[2px]" : 
-                activeTool === 'underline' ? "border-b-2 border-x-0 border-t-0 border-blue-400" : 
-                "bg-blue-500/10 border border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.3)]"
+          {isDragging && activeTool !== 'view' && activeTool !== 'hand' && (
+            <>
+              {activeTool === 'draw' ? (
+                <svg className="absolute inset-0 overflow-visible pointer-events-none">
+                  <polyline
+                    points={currentPath.map(p => `${p.x * zoom},${p.y * zoom}`).join(' ')}
+                    fill="none"
+                    stroke={highlightColor}
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              ) : (
+                <div 
+                  className={cn(
+                    "absolute transition-all",
+                    activeTool === 'highlight' ? "mix-blend-multiply rounded-[2px]" : 
+                    activeTool === 'underline' ? "border-b-2 border-x-0 border-t-0 border-blue-400" : 
+                    activeTool === 'circle' ? "border-2 border-blue-500 rounded-full" :
+                    activeTool === 'box' ? "border-2 border-blue-500 rounded-sm" :
+                    "bg-blue-500/10 border border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.3)]"
+                  )}
+                  style={{
+                    left: Math.min(dragStart.x, dragEnd.x) * zoom,
+                    top: Math.min(dragStart.y, dragEnd.y) * zoom,
+                    width: Math.abs(dragEnd.x - dragStart.x) * zoom,
+                    height: Math.abs(dragEnd.y - dragStart.y) * zoom,
+                    backgroundColor: activeTool === 'highlight' ? `${highlightColor}99` : undefined,
+                    borderColor: (activeTool === 'circle' || activeTool === 'box') ? highlightColor : undefined
+                  }}
+                />
               )}
-              style={{
-                left: Math.min(dragStart.x, dragEnd.x) * zoom,
-                top: Math.min(dragStart.y, dragEnd.y) * zoom,
-                width: Math.abs(dragEnd.x - dragStart.x) * zoom,
-                height: Math.abs(dragEnd.y - dragStart.y) * zoom,
-              }}
-            />
+            </>
           )}
         </div>
 

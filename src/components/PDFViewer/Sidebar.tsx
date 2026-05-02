@@ -217,7 +217,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
         >
           <div className={cn(
-            "flex border-b overflow-x-auto custom-scrollbar no-scrollbar transition-colors duration-300",
+            "flex border-b overflow-x-auto custom-scrollbar transition-colors duration-300 scrollbar-none",
             state.isDarkMode ? "bg-[#1E293B] border-slate-700/50" : "bg-slate-50 border-slate-200"
           )}>
             {[
@@ -232,7 +232,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 key={id}
                 onClick={() => setActiveTab(id as any)}
                 className={cn(
-                  "min-w-[60px] flex-1 py-3 flex flex-col items-center gap-1 transition-all relative",
+                  "min-w-[70px] shrink-0 py-3 flex flex-col items-center gap-1 transition-all relative",
                   activeTab === id 
                     ? "text-blue-500" 
                     : (state.isDarkMode ? "text-slate-500 hover:text-slate-300" : "text-slate-400 hover:text-slate-900")

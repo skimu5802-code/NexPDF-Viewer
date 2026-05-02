@@ -1,20 +1,43 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# NexGen PDF Viewer Pro
 
-# Run and deploy your AI Studio app
+A professional, high-performance PDF viewer component for React projects. Built with performance and flexibility in mind.
 
-This contains everything you need to run your app locally.
+## Features
 
-View your app in AI Studio: https://ai.studio/apps/046f3faf-a6f2-4242-a130-ca9995df835a
+- 🚀 **Fast Rendering**: Powered by PDF.js with hardware acceleration.
+- 🎨 **Annotations**: Professional tools for highlighting and notes.
+- 🌓 **Reader Modes**: Built-in dark mode and high-contrast support.
+- 📱 **Responsive**: Works perfectly on mobile, tablet, and desktop.
+- 🔍 **Search**: Advanced text search within full documents.
+- 📂 **Flexible**: Supports local file uploads or remote URLs.
 
-## Run Locally
+## Installation
 
-**Prerequisites:**  Node.js
+```bash
+npm install nexgen-pdf-viewer
+```
 
+## Basic Usage
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+```tsx
+import { PDFViewer } from 'nexgen-pdf-viewer';
+
+function App() {
+  return (
+    <div style={{ height: '100vh', width: '100%' }}>
+      <PDFViewer 
+        fileUrl="/my-document.pdf"
+        onAnnotationChange={(data) => console.log(data)}
+      />
+    </div>
+  );
+}
+```
+
+## Backend Integration
+The viewer is designed to work with any backend. It expects simple JSON payloads for annotations. By default, this starter includes a SQLite implementation for demonstration.
+
+## License
+
+MIT
+

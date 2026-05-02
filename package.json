@@ -1,25 +1,48 @@
 {
-  "name": "react-example",
-  "private": true,
-  "version": "0.0.0",
+  "name": "nexgen-pdf-viewer",
+  "private": false,
+  "version": "1.0.0",
+  "description": "NexGen PDF Viewer - A professional React component for PDF viewing and annotation.",
   "type": "module",
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/ultra-pdf-viewer.umd.cjs",
+  "module": "./dist/ultra-pdf-viewer.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/ultra-pdf-viewer.js",
+      "require": "./dist/ultra-pdf-viewer.umd.cjs",
+      "types": "./dist/index.d.ts"
+    }
+  },
   "scripts": {
-    "dev": "vite --port=3000 --host=0.0.0.0",
+    "dev": "tsx server.ts",
     "build": "vite build",
+    "build:lib": "vite build --config vite.config.ts --mode library",
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
+    "better-sqlite3": "^12.9.0",
     "clsx": "^2.1.1",
+    "cors": "^2.8.6",
+    "docx": "^9.6.1",
     "dotenv": "^17.2.3",
-    "express": "^4.21.2",
+    "express": "^4.22.1",
     "framer-motion": "^12.38.0",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
+    "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^4.4.168",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
@@ -33,6 +56,8 @@
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
-    "vite": "^6.2.3"
+    "vite": "^6.2.3",
+    "vite-plugin-css-injected-by-js": "^5.0.1",
+    "vite-plugin-dts": "^5.0.0"
   }
 }

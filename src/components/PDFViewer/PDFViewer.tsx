@@ -2,7 +2,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 // @ts-ignore
 import pdfjsWorker from 'pdfjs-dist/legacy/build/pdf.worker.mjs?url';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 
 // Set up the worker accurately for Vite environment
 pdfjs.GlobalWorkerOptions.workerSrc = pdfjsWorker;
@@ -12,7 +12,7 @@ import { PageRenderer } from './PageRenderer';
 import { SearchOverlay } from './SearchOverlay';
 import { PDFState, INITIAL_STATE, Annotation, AnnotationType, PDFViewerProps } from '../../types';
 import { cn } from '../../lib/utils';
-import { FileUp, Loader2, Users, Highlighter, Type, Trash2, StickyNote, X } from 'lucide-react';
+import { FileUp, Loader2, Users, Highlighter, Type, Trash2, StickyNote, X, Info, Calendar, Hash, Shield, FileText } from 'lucide-react';
 
 export default function PDFViewer({
   fileUrl,
@@ -40,11 +40,14 @@ export default function PDFViewer({
   
   const [pdfDoc, setPdfDoc] = useState<any>(null);
   const [annotations, setAnnotations] = useState<Record<string, Annotation[]>>({});
+  const [undoStack, setUndoStack] = useState<{ type: 'add' | 'delete'; annotation: Annotation; fileId: string }[]>([]);
+  const [redoStack, setRedoStack] = useState<{ type: 'add' | 'delete'; annotation: Annotation; fileId: string }[]>([]);
   
   const [loading, setLoading] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchResults, setSearchResults] = useState<{ results: number; current: number }>({ results: 0, current: 0 });
   const [noteDialog, setNoteDialog] = useState<{ isOpen: boolean; page: number; x: number; y: number; text: string; annotationId?: string } | null>(null);
+  const [documentProps, setDocumentProps] = useState<{ isOpen: boolean; metadata: any } | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; page: number; canvasX: number; canvasY: number; annotationId?: string } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -106,7 +109,7 @@ export default function PDFViewer({
     setLoading(true);
     try {
       const arrayBuffer = await file.arrayBuffer();
-      const loadingTask = pdfjs.getDocument({ data: arrayBuffer });
+      const loadingTask = pdfjs.getDocument({ data: arrayBuffer.slice(0) });
       loadingTask.onPassword = (updatePassword: (p: string) => void) => {
         const password = prompt('This document is password protected. Please enter the password:');
         if (password) {
@@ -123,8 +126,12 @@ export default function PDFViewer({
         ...prev,
         numPages: doc.numPages,
         currentPage: 1,
-        fileName: file.name
+        fileName: file.name,
+        fileData: arrayBuffer
       }));
+
+      // Fetch annotations from database
+      fetchAnnotations(file.name);
     } catch (error: any) {
       console.error('Error loading PDF:', error);
       if (error.name === 'PasswordException') {
@@ -137,6 +144,42 @@ export default function PDFViewer({
     }
   }, []);
 
+  const fetchAnnotations = async (fileId: string) => {
+    try {
+      const response = await fetch(`/api/annotations/${encodeURIComponent(fileId)}`);
+      if (response.ok) {
+        const data = await response.json();
+        const formattedData = data.map((item: any) => ({
+          ...item,
+          rects: item.width ? [{ x: item.x, y: item.y, w: item.width, h: item.height }] : [],
+          path: item.path || undefined
+        }));
+        setAnnotations(prev => ({
+          ...prev,
+          [fileId]: formattedData
+        }));
+      }
+    } catch (error) {
+      console.error('Error fetching annotations:', error);
+    }
+  };
+
+  useEffect(() => {
+    // Poll for changes every 5 seconds for collaboration
+    if (!state.fileName) return;
+    const interval = setInterval(() => {
+      fetchAnnotations(state.fileName);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [state.fileName]);
+
+  useEffect(() => {
+    // Collapse sidebar by default on small screens
+    if (window.innerWidth < 768) {
+      setState(prev => ({ ...prev, isSidebarOpen: false }));
+    }
+  }, []);
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && file.type === 'application/pdf') {
@@ -146,19 +189,21 @@ export default function PDFViewer({
 
   const [history, setHistory] = useState<{ id: string; timestamp: number; name: string }[]>([]);
 
-  const handleAddAnnotation = (page: number, x: number, y: number, type: AnnotationType = 'note', w?: number, h?: number) => {
+  const handleAddAnnotation = async (page: number, x: number, y: number, type: AnnotationType = 'note', w?: number, h?: number, path?: { x: number; y: number }[]) => {
     if (!state.fileName) return;
 
     let content = '';
-    let color = '#facc15'; // default for note
+    let color = state.highlightColor;
     
     if (type === 'note') {
       setNoteDialog({ isOpen: true, page, x, y, text: '' });
       return;
     } else if (type === 'highlight') {
-      color = '#facc15'; // light yellow highlight
+      color = state.highlightColor;
     } else if (type === 'underline') {
-      color = '#3b82f6'; // blue underline
+      color = '#3b82f6';
+    } else if (type === 'box' || type === 'circle' || type === 'draw') {
+      color = state.highlightColor;
     }
 
     const newAnnotation: Annotation = {
@@ -172,55 +217,217 @@ export default function PDFViewer({
         w: w || 100, 
         h: h || 15 
       }],
+      path,
       content,
       author: 'User',
       createdAt: Date.now()
     };
 
-    const currentFileAnnotations = annotations[state.fileName] || [];
-    const updatedFileAnnotations = [...currentFileAnnotations, newAnnotation];
-    
-    const updatedAllAnnotations = {
-      ...annotations,
-      [state.fileName]: updatedFileAnnotations
-    };
+    try {
+      await fetch('/api/annotations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...newAnnotation,
+          fileId: state.fileName,
+          x: newAnnotation.rects[0].x,
+          y: newAnnotation.rects[0].y,
+          width: newAnnotation.rects[0].w,
+          height: newAnnotation.rects[0].h,
+          text: newAnnotation.content,
+          path: newAnnotation.path
+        })
+      });
 
-    setAnnotations(updatedAllAnnotations);
-    onAnnotationChange?.(updatedFileAnnotations);
-    
-    // Simple History
-    setHistory(prev => [{ 
-      id: crypto.randomUUID(), 
-      timestamp: Date.now(), 
-      name: `Added ${type} on page ${page}` 
-    }, ...prev.slice(0, 9)]);
+      const currentFileAnnotations = annotations[state.fileName] || [];
+      const updatedFileAnnotations = [...currentFileAnnotations, newAnnotation];
+      
+      // Save action for undo
+      setUndoStack(prev => [{ type: 'add', annotation: newAnnotation, fileId: state.fileName! }, ...prev].slice(0, 50));
+      setRedoStack([]);
+
+      const updatedAllAnnotations = {
+        ...annotations,
+        [state.fileName]: updatedFileAnnotations
+      };
+
+      setAnnotations(updatedAllAnnotations);
+      onAnnotationChange?.(updatedFileAnnotations);
+      
+      // Simple History
+      setHistory(prev => [{ 
+        id: crypto.randomUUID(), 
+        timestamp: Date.now(), 
+        name: `Added ${type} on page ${page}` 
+      }, ...prev.slice(0, 9)]);
+    } catch (error) {
+      console.error('Error saving annotation:', error);
+      alert('Failed to save annotation to database.');
+    }
   };
 
-  const handleRemoveAnnotation = (id: string) => {
+  const handleRemoveAnnotation = async (id: string) => {
     if (!state.fileName) return;
 
-    const currentFileAnnotations = annotations[state.fileName] || [];
-    const updatedFileAnnotations = currentFileAnnotations.filter(ann => ann.id !== id);
-    
-    const updatedAllAnnotations = {
-      ...annotations,
-      [state.fileName]: updatedFileAnnotations
-    };
+    try {
+      await fetch(`/api/annotations/${id}`, { method: 'DELETE' });
 
-    setAnnotations(updatedAllAnnotations);
-    onAnnotationChange?.(updatedFileAnnotations);
-    
-    // History
-    setHistory(prev => [{ 
-      id: crypto.randomUUID(), 
-      timestamp: Date.now(), 
-      name: `Removed annotation` 
-    }, ...prev.slice(0, 9)]);
+      const currentFileAnnotations = annotations[state.fileName] || [];
+      const removedAnnotation = currentFileAnnotations.find(ann => ann.id === id);
+      const updatedFileAnnotations = currentFileAnnotations.filter(ann => ann.id !== id);
+      
+      if (removedAnnotation) {
+        // Save action for undo
+        setUndoStack(prev => [{ type: 'delete', annotation: removedAnnotation, fileId: state.fileName! }, ...prev].slice(0, 50));
+        setRedoStack([]);
+      }
+      
+      const updatedAllAnnotations = {
+        ...annotations,
+        [state.fileName]: updatedFileAnnotations
+      };
+
+      setAnnotations(updatedAllAnnotations);
+      onAnnotationChange?.(updatedFileAnnotations);
+      
+      // History
+      setHistory(prev => [{ 
+        id: crypto.randomUUID(), 
+        timestamp: Date.now(), 
+        name: `Removed annotation` 
+      }, ...prev.slice(0, 9)]);
+    } catch (error) {
+      console.error('Error removing annotation:', error);
+    }
   };
 
   const handleExport = (format: 'pdf' | 'docx') => {
     alert(`Exporting as ${format.toUpperCase()}... In a real app, this would process the PDF and annotations server-side.`);
   };
+
+  const handleUndo = useCallback(async () => {
+    if (undoStack.length === 0 || !state.fileName) return;
+    
+    const [action, ...restUndo] = undoStack;
+    setUndoStack(restUndo);
+    
+    try {
+      if (action.type === 'add') {
+        // Undo adding: delete from server and state
+        await fetch(`/api/annotations/${action.annotation.id}`, { method: 'DELETE' });
+        
+        setAnnotations(prev => {
+          const fileAnns = prev[action.fileId] || [];
+          return { ...prev, [action.fileId]: fileAnns.filter(a => a.id !== action.annotation.id) };
+        });
+      } else {
+        // Undo deleting: re-add to server and state
+        await fetch('/api/annotations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...action.annotation,
+            fileId: action.fileId,
+            x: action.annotation.rects[0].x,
+            y: action.annotation.rects[0].y,
+            width: action.annotation.rects[0].w,
+            height: action.annotation.rects[0].h,
+            text: action.annotation.content,
+            path: action.annotation.path
+          })
+        });
+
+        setAnnotations(prev => {
+          const fileAnns = prev[action.fileId] || [];
+          return { ...prev, [action.fileId]: [...fileAnns, action.annotation] };
+        });
+      }
+      
+      setRedoStack(prev => [action, ...prev]);
+      
+      // Update sidebar if current file
+      if (action.fileId === state.fileName) {
+        const updated = annotations[state.fileName] || [];
+        onAnnotationChange?.(action.type === 'add' 
+          ? updated.filter(a => a.id !== action.annotation.id)
+          : [...updated, action.annotation]
+        );
+      }
+    } catch (error) {
+      console.error('Undo error:', error);
+    }
+  }, [undoStack, state.fileName, annotations, onAnnotationChange]);
+
+  const handleRedo = useCallback(async () => {
+    if (redoStack.length === 0 || !state.fileName) return;
+    
+    const [action, ...restRedo] = redoStack;
+    setRedoStack(restRedo);
+    
+    try {
+      if (action.type === 'add') {
+        // Redo adding: re-add to server and state
+        await fetch('/api/annotations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...action.annotation,
+            fileId: action.fileId,
+            x: action.annotation.rects[0].x,
+            y: action.annotation.rects[0].y,
+            width: action.annotation.rects[0].w,
+            height: action.annotation.rects[0].h,
+            text: action.annotation.content,
+            path: action.annotation.path
+          })
+        });
+
+        setAnnotations(prev => {
+          const fileAnns = prev[action.fileId] || [];
+          return { ...prev, [action.fileId]: [...fileAnns, action.annotation] };
+        });
+      } else {
+        // Redo deleting: delete from server and state
+        await fetch(`/api/annotations/${action.annotation.id}`, { method: 'DELETE' });
+        
+        setAnnotations(prev => {
+          const fileAnns = prev[action.fileId] || [];
+          return { ...prev, [action.fileId]: fileAnns.filter(a => a.id !== action.annotation.id) };
+        });
+      }
+      
+      setUndoStack(prev => [action, ...prev]);
+      
+      if (action.fileId === state.fileName) {
+        const updated = annotations[state.fileName] || [];
+        onAnnotationChange?.(action.type === 'add' 
+          ? [...updated, action.annotation]
+          : updated.filter(a => a.id !== action.annotation.id)
+        );
+      }
+    } catch (error) {
+      console.error('Redo error:', error);
+    }
+  }, [redoStack, state.fileName, annotations, onAnnotationChange]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        if (e.shiftKey) {
+          handleRedo();
+        } else {
+          handleUndo();
+        }
+        e.preventDefault();
+      } else if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+        handleRedo();
+        e.preventDefault();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleUndo, handleRedo]);
 
   const scrollToPage = (pageNum: number) => {
     const pageEl = document.getElementById(`page-${pageNum}`);
@@ -242,8 +449,8 @@ export default function PDFViewer({
     onPageChange?.(pageNum);
   };
 
-  const finishAddNote = (text: string) => {
-    if (!noteDialog) return;
+  const finishAddNote = async (text: string) => {
+    if (!noteDialog || !state.fileName) return;
     
     const { page, x, y } = noteDialog;
     const type: AnnotationType = 'note';
@@ -261,17 +468,38 @@ export default function PDFViewer({
       createdAt: Date.now()
     };
 
-    const currentFileAnnotations = annotations[state.fileName!] || [];
-    const updatedFileAnnotations = [...currentFileAnnotations, newAnnotation];
-    
-    const updatedAllAnnotations = {
-      ...annotations,
-      [state.fileName!]: updatedFileAnnotations
-    };
+    try {
+      await fetch('/api/annotations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...newAnnotation,
+          fileId: state.fileName,
+          x: newAnnotation.rects[0].x,
+          y: newAnnotation.rects[0].y,
+          width: newAnnotation.rects[0].w,
+          height: newAnnotation.rects[0].h,
+          text: newAnnotation.content
+        })
+      });
 
-    setAnnotations(updatedAllAnnotations);
-    onAnnotationChange?.(updatedFileAnnotations);
-    setNoteDialog(null);
+      const currentFileAnnotations = annotations[state.fileName] || [];
+      const updatedFileAnnotations = [...currentFileAnnotations, newAnnotation];
+      
+      setUndoStack(prev => [{ type: 'add', annotation: newAnnotation, fileId: state.fileName! }, ...prev].slice(0, 50));
+      setRedoStack([]);
+
+      const updatedAllAnnotations = {
+        ...annotations,
+        [state.fileName]: updatedFileAnnotations
+      };
+
+      setAnnotations(updatedAllAnnotations);
+      onAnnotationChange?.(updatedFileAnnotations);
+      setNoteDialog(null);
+    } catch (error) {
+      console.error('Error saving note:', error);
+    }
   };
 
   const handleContextMenu = (e: React.MouseEvent, page: number, canvasX: number, canvasY: number, annotationId?: string) => {
@@ -325,38 +553,183 @@ export default function PDFViewer({
     window.print();
   };
 
-  const handleDownload = async () => {
-    if (!pdfDoc) return;
+  const handleDownload = async (format: 'pdf' | 'docx') => {
+    if (!state.fileData || !state.fileName) return;
+    
+    setLoading(true);
     try {
-      const data = await pdfDoc.getData();
-      const blob = new Blob([data], { type: 'application/pdf' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = state.fileName || 'document.pdf';
-      link.click();
-      URL.revokeObjectURL(url);
+      if (format === 'pdf') {
+        const { PDFDocument, rgb } = await import('pdf-lib');
+        const pdfDoc = await PDFDocument.load(state.fileData.slice(0));
+        const pages = pdfDoc.getPages();
+        
+        const fileAnnotations = annotations[state.fileName] || [];
+        
+        // Loop through annotations and add to PDF
+        for (const ann of fileAnnotations) {
+          if (ann.page <= pages.length) {
+            const page = pages[ann.page - 1];
+            const { height } = page.getSize();
+            
+            for (const rect of ann.rects) {
+              // Convert coordinate system: Top-Left to Bottom-Left
+              // PageRenderer uses x, y relative to zoom=1 pixels
+              const x = rect.x;
+              const y = height - rect.y - rect.h;
+              
+              const hexToRgb = (hex: string) => {
+                const r = parseInt(hex.slice(1, 3), 16) / 255;
+                const g = parseInt(hex.slice(3, 5), 16) / 255;
+                const b = parseInt(hex.slice(5, 7), 16) / 255;
+                return rgb(r, g, b);
+              };
+
+              const color = hexToRgb(ann.color);
+
+              if (ann.type === 'highlight') {
+                page.drawRectangle({
+                  x,
+                  y,
+                  width: rect.w,
+                  height: rect.h,
+                  color: color,
+                  opacity: 0.4,
+                });
+              } else if (ann.type === 'underline') {
+                page.drawLine({
+                  start: { x, y: height - rect.y - rect.h },
+                  end: { x: x + rect.w, y: height - rect.y - rect.h },
+                  thickness: 2,
+                  color: color,
+                });
+              } else if (ann.type === 'note') {
+                // Simplified note representation: a small box or icon
+                page.drawRectangle({
+                  x: x - 10,
+                  y: height - rect.y - 10,
+                  width: 20,
+                  height: 20,
+                  color: rgb(1, 0.8, 0.2),
+                  borderColor: rgb(0, 0, 0),
+                  borderWidth: 1,
+                });
+                page.drawText('!', {
+                  x: x - 3,
+                  y: height - rect.y - 5,
+                  size: 14,
+                  color: rgb(0, 0, 0),
+                });
+              }
+            }
+          }
+        }
+        
+        const pdfBytes = await pdfDoc.save();
+        const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${state.fileName.replace('.pdf', '')}_annotated.pdf`;
+        link.click();
+        URL.revokeObjectURL(url);
+
+      } else if (format === 'docx') {
+        const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = await import('docx');
+        
+        const fileAnnotations = annotations[state.fileName] || [];
+        
+        const doc = new Document({
+          sections: [{
+            properties: {},
+            children: [
+              new Paragraph({
+                text: `Annotation Summary: ${state.fileName}`,
+                heading: HeadingLevel.HEADING_1,
+                alignment: AlignmentType.CENTER,
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: `Exported on: ${new Date().toLocaleString()}`,
+                    italics: true,
+                  }),
+                ],
+                spacing: { after: 400 },
+              }),
+              ...fileAnnotations.flatMap((ann, index) => [
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: `Annotation #${index + 1}: ${ann.type.toUpperCase()}`,
+                      bold: true,
+                    }),
+                    new TextRun({
+                      text: ` (Page ${ann.page})`,
+                      italics: true,
+                    }),
+                  ],
+                  spacing: { before: 200 },
+                }),
+                ann.content ? new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: `Content: ${ann.content}`,
+                    }),
+                  ],
+                }) : null,
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: `Author: ${ann.author} | Created: ${new Date(ann.createdAt).toLocaleTimeString()}`,
+                      size: 16,
+                      color: "666666",
+                    }),
+                  ],
+                  spacing: { after: 200 },
+                }),
+              ].filter(Boolean) as any[]),
+              fileAnnotations.length === 0 ? new Paragraph({
+                text: "No annotations found in this document.",
+              }) : null,
+            ].filter(Boolean) as any[],
+          }],
+        });
+
+        const buffer = await Packer.toBuffer(doc);
+        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${state.fileName.replace('.pdf', '')}_annotations.docx`;
+        link.click();
+        URL.revokeObjectURL(url);
+      }
     } catch (err) {
-      console.error("Download error:", err);
+      console.error("Export error:", err);
+      alert(`Failed to export as ${format.toUpperCase()}. See console for details.`);
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleShowInfo = async () => {
     if (!pdfDoc) return;
+    setLoading(true);
     try {
-      const { info } = await pdfDoc.getMetadata();
-      const details = [
-        `Title: ${info.Title || 'N/A'}`,
-        `Author: ${info.Author || 'N/A'}`,
-        `Subject: ${info.Subject || 'N/A'}`,
-        `Creator: ${info.Creator || 'N/A'}`,
-        `Producer: ${info.Producer || 'N/A'}`,
-        `Creation Date: ${info.CreationDate || 'N/A'}`,
-        `Modification Date: ${info.ModDate || 'N/A'}`,
-      ].join('\n');
-      alert(`Document Properties:\n\n${details}`);
+      const { info, metadata } = await pdfDoc.getMetadata();
+      setDocumentProps({
+        isOpen: true,
+        metadata: {
+          ...info,
+          Pages: pdfDoc.numPages,
+          Version: pdfDoc.version || '1.7',
+          Size: state.fileData ? `${(state.fileData.byteLength / (1024 * 1024)).toFixed(2)} MB` : 'N/A'
+        }
+      });
     } catch (err) {
       console.error("Metadata error:", err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -457,6 +830,75 @@ export default function PDFViewer({
         </div>
       )}
 
+      {documentProps?.isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+          <motion.div 
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className={cn(
+              "border w-full max-w-xl rounded-[2.5rem] shadow-2xl overflow-hidden p-8 transition-colors duration-300",
+              state.isDarkMode ? "bg-[#0F172A] border-slate-700" : "bg-white border-slate-200"
+            )}
+          >
+            <div className="flex justify-between items-center mb-8">
+              <div className="flex items-center gap-3">
+                <div className="bg-blue-500/10 p-2 rounded-xl">
+                  <Info size={20} className="text-blue-500" />
+                </div>
+                <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-slate-400">Document Properties</h3>
+              </div>
+              <button 
+                onClick={() => setDocumentProps(null)}
+                className={cn(
+                  "p-2 rounded-full transition-all hover:bg-slate-100",
+                  state.isDarkMode ? "text-slate-500 hover:text-white hover:bg-slate-800" : "text-slate-400 hover:text-slate-900"
+                )}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
+              {[
+                { label: 'Title', value: documentProps.metadata.Title, icon: FileText },
+                { label: 'Author', value: documentProps.metadata.Author, icon: Users },
+                { label: 'Subject', value: documentProps.metadata.Subject, icon: Info },
+                { label: 'Keywords', value: documentProps.metadata.Keywords, icon: Hash },
+                { label: 'Creator', value: documentProps.metadata.Creator, icon: Shield },
+                { label: 'Producer', value: documentProps.metadata.Producer, icon: Shield },
+                { label: 'Created', value: documentProps.metadata.CreationDate, icon: Calendar },
+                { label: 'Modified', value: documentProps.metadata.ModDate, icon: Calendar },
+                { label: 'Pages', value: documentProps.metadata.Pages, icon: Hash },
+                { label: 'Version', value: `PDF ${documentProps.metadata.Version}`, icon: Info },
+                { label: 'File Size', value: documentProps.metadata.Size, icon: FileText },
+              ].map((item, idx) => (
+                <div key={idx} className="space-y-1">
+                  <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">
+                    <item.icon size={12} className="text-blue-500/50" />
+                    {item.label}
+                  </div>
+                  <div className={cn(
+                    "text-sm font-medium truncate",
+                    state.isDarkMode ? "text-slate-200" : "text-slate-800"
+                  )}>
+                    {item.value || 'Not available'}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-10 pt-6 border-t border-slate-700/30 flex justify-end">
+              <button 
+                onClick={() => setDocumentProps(null)}
+                className="bg-slate-800 hover:bg-slate-700 text-white px-8 py-3 rounded-xl transition-all shadow-xl active:scale-95"
+              >
+                Done
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
       {contextMenu && (
         <div 
           className="fixed inset-0 z-[110]"
@@ -520,8 +962,11 @@ export default function PDFViewer({
                     state.isDarkMode ? "text-slate-300 hover:bg-white/5 hover:text-white" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                   )}
                 >
-                  <div className="bg-yellow-400/10 p-1.5 rounded-lg group-hover:bg-yellow-400/20 transition-colors">
-                    <Highlighter size={14} className="text-yellow-400" />
+                  <div 
+                    className="p-1.5 rounded-lg group-hover:opacity-80 transition-opacity"
+                    style={{ backgroundColor: `${state.highlightColor}20` }}
+                  >
+                    <Highlighter size={14} style={{ color: state.highlightColor }} />
                   </div>
                   <span className="font-medium">Highlight Here</span>
                 </button>
@@ -580,6 +1025,10 @@ export default function PDFViewer({
           onShowInfo={handleShowInfo}
           allowUpload={allowUpload}
           searchEnabled={searchEnabled}
+          canUndo={undoStack.length > 0}
+          canRedo={redoStack.length > 0}
+          onUndo={handleUndo}
+          onRedo={handleRedo}
         />
       )}
 
@@ -596,15 +1045,28 @@ export default function PDFViewer({
 
       <div className="flex-1 flex overflow-hidden relative">
         {showSidebar && (
-          <Sidebar 
-            isOpen={state.isSidebarOpen}
-            pdfDoc={pdfDoc}
-            state={state}
-            annotations={currentAnnotations}
-            history={history}
-            onPageSelect={handlePageNavigation}
-            onCloudSync={(service) => alert(`Connecting to ${service}...`)}
-          />
+          <>
+            <AnimatePresence>
+              {state.isSidebarOpen && (
+                <motion.div 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setState(prev => ({ ...prev, isSidebarOpen: false }))}
+                  className="fixed inset-0 bg-slate-950/40 backdrop-blur-[2px] z-30 md:hidden"
+                />
+              )}
+            </AnimatePresence>
+            <Sidebar 
+              isOpen={state.isSidebarOpen}
+              pdfDoc={pdfDoc}
+              state={state}
+              annotations={currentAnnotations}
+              history={history}
+              onPageSelect={handlePageNavigation}
+              onCloudSync={(service) => alert(`Connecting to ${service}...`)}
+            />
+          </>
         )}
 
         <main 
@@ -614,9 +1076,9 @@ export default function PDFViewer({
           onMouseUp={handlePanUp}
           onMouseLeave={handlePanUp}
           className={cn(
-            "flex-1 overflow-y-auto px-12 py-10 transition-all duration-300 custom-scrollbar",
+            "flex-1 overflow-y-auto px-4 md:px-12 py-10 transition-all duration-300 custom-scrollbar",
             state.isDarkMode ? "bg-slate-950/50" : "bg-slate-200/50",
-            state.isSidebarOpen ? "ml-56" : "ml-0",
+            state.isSidebarOpen ? "md:ml-56" : "ml-0",
             state.activeTool === 'hand' ? (isPanning ? "cursor-grabbing" : "cursor-grab") : "cursor-default"
           )}
         >
@@ -678,8 +1140,13 @@ export default function PDFViewer({
                       isDarkMode={state.isDarkMode}
                       annotations={currentAnnotations}
                       activeTool={state.activeTool}
-                      onAddAnnotation={(p, x, y, w, h) => handleAddAnnotation(p, x, y, state.activeTool === 'view' ? 'note' : state.activeTool as any, w, h)}
-                      onPageVisible={(p) => handleStateChange({ currentPage: p })}
+                      highlightColor={state.highlightColor}
+                      onAddAnnotation={(p, x, y, w, h, t, pt) => handleAddAnnotation(p, x, y, t || (state.activeTool === 'view' ? 'note' : state.activeTool as any), w, h, pt)}
+                      onPageVisible={(p) => {
+                        if (state.currentPage !== p) {
+                          handleStateChange({ currentPage: p });
+                        }
+                      }}
                       onRemoveAnnotation={handleRemoveAnnotation}
                       onContextMenu={handleContextMenu}
                     />
@@ -696,7 +1163,8 @@ export default function PDFViewer({
                     isDarkMode={state.isDarkMode}
                     annotations={currentAnnotations}
                     activeTool={state.activeTool}
-                    onAddAnnotation={(p, x, y, w, h) => handleAddAnnotation(p, x, y, state.activeTool === 'view' ? 'note' : state.activeTool as any, w, h)}
+                    highlightColor={state.highlightColor}
+                    onAddAnnotation={(p, x, y, w, h, t, pt) => handleAddAnnotation(p, x, y, t || (state.activeTool === 'view' ? 'note' : state.activeTool as any), w, h, pt)}
                     onPageVisible={() => {}}
                     onRemoveAnnotation={handleRemoveAnnotation}
                     onContextMenu={handleContextMenu}
@@ -713,12 +1181,24 @@ export default function PDFViewer({
                           pdfDoc={pdfDoc}
                           zoom={state.zoom}
                           rotation={state.rotation}
-                          isActive={state.currentPage === p1}
+                          isActive={state.currentPage === p1 || (state.viewMode === 'double' && state.currentPage === p1 - 1)}
                           isDarkMode={state.isDarkMode}
                           annotations={currentAnnotations}
                           activeTool={state.activeTool}
-                          onAddAnnotation={(p, x, y, w, h) => handleAddAnnotation(p, x, y, state.activeTool === 'view' ? 'note' : state.activeTool as any, w, h)}
-                          onPageVisible={(p) => handleStateChange({ currentPage: p })}
+                          highlightColor={state.highlightColor}
+                          onAddAnnotation={(p, x, y, w, h, t, pt) => handleAddAnnotation(p, x, y, t || (state.activeTool === 'view' ? 'note' : state.activeTool as any), w, h, pt)}
+                          onPageVisible={(p) => {
+                            if (state.viewMode === 'double') {
+                              const rowStart = Math.floor((p - 1) / 2) * 2 + 1;
+                              if (state.currentPage !== rowStart) {
+                                handleStateChange({ currentPage: rowStart });
+                              }
+                            } else {
+                              if (state.currentPage !== p) {
+                                handleStateChange({ currentPage: p });
+                              }
+                            }
+                          }}
                           onRemoveAnnotation={handleRemoveAnnotation}
                           onContextMenu={handleContextMenu}
                         />
@@ -731,12 +1211,24 @@ export default function PDFViewer({
                           pdfDoc={pdfDoc}
                           zoom={state.zoom}
                           rotation={state.rotation}
-                          isActive={state.currentPage === p2}
+                          isActive={state.currentPage === p2 || (state.viewMode === 'double' && state.currentPage === p2 - 1)}
                           isDarkMode={state.isDarkMode}
                           annotations={currentAnnotations}
                           activeTool={state.activeTool}
-                          onAddAnnotation={(p, x, y, w, h) => handleAddAnnotation(p, x, y, state.activeTool === 'view' ? 'note' : state.activeTool as any, w, h)}
-                          onPageVisible={(p) => handleStateChange({ currentPage: p })}
+                          highlightColor={state.highlightColor}
+                          onAddAnnotation={(p, x, y, w, h, t, pt) => handleAddAnnotation(p, x, y, t || (state.activeTool === 'view' ? 'note' : state.activeTool as any), w, h, pt)}
+                          onPageVisible={(p) => {
+                            if (state.viewMode === 'double') {
+                              const rowStart = Math.floor((p - 1) / 2) * 2 + 1;
+                              if (state.currentPage !== rowStart) {
+                                handleStateChange({ currentPage: rowStart });
+                              }
+                            } else {
+                              if (state.currentPage !== p) {
+                                handleStateChange({ currentPage: p });
+                              }
+                            }
+                          }}
                           onRemoveAnnotation={handleRemoveAnnotation}
                           onContextMenu={handleContextMenu}
                         />

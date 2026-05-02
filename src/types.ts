@@ -1,4 +1,4 @@
-export type AnnotationType = 'highlight' | 'underline' | 'note' | 'strikeout';
+export type AnnotationType = 'highlight' | 'underline' | 'note' | 'strikeout' | 'box' | 'circle' | 'draw';
 
 export interface Annotation {
   id: string;
@@ -6,6 +6,7 @@ export interface Annotation {
   type: AnnotationType;
   color: string;
   rects: { x: number; y: number; w: number; h: number }[];
+  path?: { x: number; y: number }[]; // For freehand drawing
   text?: string;
   content?: string;
   author: string;
@@ -41,11 +42,13 @@ export interface PDFState {
   zoom: number;
   rotation: number;
   fileName: string | null;
-  activeTool: 'view' | 'note' | 'highlight' | 'underline' | 'hand';
+  activeTool: 'view' | 'note' | 'highlight' | 'underline' | 'hand' | 'box' | 'circle' | 'draw';
   isSidebarOpen: boolean;
   isDarkMode: boolean;
   viewMode: 'single' | 'double' | 'continuous';
   zoomMode: 'custom' | 'fit-page' | 'fit-width';
+  highlightColor: string;
+  fileData: ArrayBuffer | null;
 }
 
 export const INITIAL_STATE: PDFState = {
@@ -59,4 +62,6 @@ export const INITIAL_STATE: PDFState = {
   isDarkMode: true,
   viewMode: 'continuous',
   zoomMode: 'custom',
+  highlightColor: '#fbbf24', // Default amber-400
+  fileData: null,
 };
