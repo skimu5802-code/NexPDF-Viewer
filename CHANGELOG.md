@@ -43,25 +43,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 📊 Pagination and thumbnails
 - 📝 Comprehensive TypeScript types
 
+## [1.0.1] - 2026-05-11
+
+### Added
+- Comprehensive documentation with Props, Methods, and Examples
+- Troubleshooting guide
+- Browser support table
+- Performance tips
+
+### Changed
+- Enhanced README with better structure
+
+### Fixed
+- Documentation clarity
+
 ---
 
-## Planned Features (Future Releases)
-
-### v1.1.0
-- [ ] Print support
-- [ ] Export annotations as PDF
-- [ ] Page labeling
-- [ ] Bookmarks/Outline support
-- [ ] Form field support
-
-### v1.2.0
-- [ ] OCR support
-- [ ] Multi-user real-time collaboration
-- [ ] Annotation comments and discussions
-- [ ] Advanced search filters
-
-### v2.0.0
-- [ ] WebAssembly optimization
-- [ ] Custom annotation types
-- [ ] Advanced rendering options
-- [ ] Plugin system
