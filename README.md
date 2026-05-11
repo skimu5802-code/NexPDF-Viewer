@@ -571,3 +571,4 @@ MIT
 ---
 
 **Questions or Issues?** [Open an issue on GitHub](https://github.com/skimu5802-code/NexPDFViewer/issues)
+**Questions or Issues?** [Open an issue on GitHub](https://github.com/skimu5802-code/NexPDFViewer/issues)
