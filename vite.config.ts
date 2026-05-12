@@ -11,7 +11,9 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [
-      react(),
+      react({
+        jsxRuntime: 'automatic',
+      }),
       tailwindcss(),
       isLibrary && dts({
         insertTypesEntry: true,
@@ -36,20 +38,37 @@ export default defineConfig(({ mode }) => {
         formats: ['es', 'umd'],
       },
       rollupOptions: {
-        external: ['react', 'react-dom'],
+        external: ['react', 'react-dom', 'react/jsx-runtime'],
         output: {
           globals: {
             react: 'React',
             'react-dom': 'ReactDOM',
+            'react/jsx-runtime': 'ReactJSXRuntime',
           },
         },
       },
+      // Prevent inlining of external dependencies
+      commonjsOptions: {
+        include: /node_modules/,
+      },
       sourcemap: true,
+      // Ensure clean rollup bundle without Vite internals
+      minify: 'terser',
+      terserOptions: {
+        compress: {
+          drop_console: false,
+        },
+      },
     } : {
       outDir: 'dist',
     },
     server: {
       hmr: process.env.DISABLE_HMR !== 'true',
+    },
+    // Optimize Vite dependency handling for better stability
+    optimizeDeps: {
+      include: ['react', 'react-dom'],
+      exclude: [],
     },
   };
 });
