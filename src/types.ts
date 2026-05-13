@@ -7,6 +7,7 @@ export interface Annotation {
   color: string;
   rects: { x: number; y: number; w: number; h: number }[];
   path?: { x: number; y: number }[]; // For freehand drawing
+  lineWidth?: number; // For draw tool
   text?: string;
   content?: string;
   author: string;
@@ -30,9 +31,15 @@ export interface PDFViewerProps {
   searchEnabled?: boolean;
   theme?: PDFViewerTheme;
   externalAnnotations?: Annotation[];
+  annotationsApiUrl?: string;
+  annotationLoader?: (fileId: string) => Promise<Annotation[]>;
   onAnnotationChange?: (annotations: Annotation[]) => void;
   onPageChange?: (page: number) => void;
   onLoadSuccess?: (numPages: number) => void;
+  onDocumentLoad?: (numPages: number) => void;
+  height?: string | number;
+  width?: string | number;
+  fitPage?: 'width' | 'page';
   className?: string;
 }
 
@@ -48,6 +55,7 @@ export interface PDFState {
   viewMode: 'single' | 'double' | 'continuous';
   zoomMode: 'custom' | 'fit-page' | 'fit-width';
   highlightColor: string;
+  drawLineWidth: number;
   fileData: ArrayBuffer | null;
 }
 
@@ -63,5 +71,6 @@ export const INITIAL_STATE: PDFState = {
   viewMode: 'continuous',
   zoomMode: 'custom',
   highlightColor: '#fbbf24', // Default amber-400
+  drawLineWidth: 2,
   fileData: null,
 };

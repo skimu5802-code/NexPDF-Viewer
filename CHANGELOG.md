@@ -43,6 +43,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 📊 Pagination and thumbnails
 - 📝 Comprehensive TypeScript types
 
+## [1.0.7] - 2026-05-13
+
+### Added
+- Dynamic parent-width responsive toolbar sizing for any container width
+- Intelligent toolbar collapse behavior that adapts continuously instead of fixed breakpoints
+- Draw tool width dropdown with live line width handling
+
+### Changed
+- Improved toolbar responsiveness to keep more controls visible at intermediate widths
+- Better parent container resize detection for the PDF viewer
+
+### Fixed
+- Correctly apply selected draw line width to live drawing preview
+- Prevent unnecessary toolbar collapse at larger container widths
+
+---
+
 ## [1.0.1] - 2026-05-11
 
 ### Added

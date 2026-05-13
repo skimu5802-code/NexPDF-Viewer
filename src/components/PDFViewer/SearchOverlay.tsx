@@ -74,7 +74,7 @@ export const SearchOverlay: React.FC<SearchOverlayProps> = ({
               onClick={onPrev}
               disabled={results === 0}
               className={cn(
-                "p-1.5 rounded disabled:opacity-20 transition-colors",
+                "p-2 rounded disabled:opacity-20 transition-colors",
                 isDarkMode ? "hover:bg-slate-700 text-slate-400" : "hover:bg-slate-100 text-slate-500"
               )}
             >
@@ -84,7 +84,7 @@ export const SearchOverlay: React.FC<SearchOverlayProps> = ({
               onClick={onNext}
               disabled={results === 0}
               className={cn(
-                "p-1.5 rounded disabled:opacity-20 transition-colors",
+                "p-2 rounded disabled:opacity-20 transition-colors",
                 isDarkMode ? "hover:bg-slate-700 text-slate-400" : "hover:bg-slate-100 text-slate-500"
               )}
             >
@@ -93,7 +93,7 @@ export const SearchOverlay: React.FC<SearchOverlayProps> = ({
             <button 
               onClick={onClose}
               className={cn(
-                "p-1.5 rounded ml-1 transition-colors",
+                "p-2 rounded ml-1 transition-colors",
                 isDarkMode ? "hover:bg-slate-700 text-slate-400" : "hover:bg-slate-100 text-slate-500"
               )}
             >

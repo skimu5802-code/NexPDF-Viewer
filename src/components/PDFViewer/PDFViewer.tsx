@@ -13,6 +13,7 @@ import { SearchOverlay } from './SearchOverlay';
 import { PDFState, INITIAL_STATE, Annotation, AnnotationType, PDFViewerProps } from '../../types';
 import { cn } from '../../lib/utils';
 import { FileUp, Loader2, Users, Highlighter, Type, Trash2, StickyNote, X, Info, Calendar, Hash, Shield, FileText } from 'lucide-react';
+import { version } from '../../../package.json';
 
 export default function PDFViewer({
   fileUrl,
@@ -24,9 +25,15 @@ export default function PDFViewer({
   searchEnabled = true,
   theme,
   externalAnnotations,
+  annotationsApiUrl,
+  annotationLoader,
   onAnnotationChange,
   onPageChange,
   onLoadSuccess,
+  onDocumentLoad,
+  height,
+  width,
+  fitPage,
   className
 }: PDFViewerProps) {
   const [state, setState] = useState<PDFState>(() => {
@@ -34,7 +41,8 @@ export default function PDFViewer({
       ...INITIAL_STATE,
       currentPage: initialPage,
       zoom: initialZoom,
-      isSidebarOpen: showSidebar
+      isSidebarOpen: showSidebar,
+      zoomMode: fitPage === 'width' ? 'fit-width' : fitPage === 'page' ? 'fit-page' : INITIAL_STATE.zoomMode
     };
   });
   
@@ -51,6 +59,7 @@ export default function PDFViewer({
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; page: number; canvasX: number; canvasY: number; annotationId?: string } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const calculateZoom = useCallback(async (mode: 'fit-page' | 'fit-width') => {
@@ -130,7 +139,10 @@ export default function PDFViewer({
         fileData: arrayBuffer
       }));
 
-      // Fetch annotations from database
+      onLoadSuccess?.(doc.numPages);
+      onDocumentLoad?.(doc.numPages);
+
+      // Fetch annotations from database if the consumer provided a source
       fetchAnnotations(file.name);
     } catch (error: any) {
       console.error('Error loading PDF:', error);
@@ -145,33 +157,58 @@ export default function PDFViewer({
   }, []);
 
   const fetchAnnotations = async (fileId: string) => {
+    if (!fileId || externalAnnotations) return;
+    if (!annotationLoader && !annotationsApiUrl) return;
+
     try {
-      const response = await fetch(`/api/annotations/${encodeURIComponent(fileId)}`);
-      if (response.ok) {
-        const data = await response.json();
-        const formattedData = data.map((item: any) => ({
-          ...item,
-          rects: item.width ? [{ x: item.x, y: item.y, w: item.width, h: item.height }] : [],
-          path: item.path || undefined
-        }));
-        setAnnotations(prev => ({
-          ...prev,
-          [fileId]: formattedData
-        }));
+      let data: any;
+
+      if (annotationLoader) {
+        data = await annotationLoader(fileId);
+      } else {
+        const baseUrl = annotationsApiUrl?.replace(/\/$/, '') || '/api/annotations';
+        const response = await fetch(`${baseUrl}/${encodeURIComponent(fileId)}`);
+
+        if (!response.ok) {
+          console.error('Error fetching annotations:', response.status, response.statusText);
+          return;
+        }
+
+        data = await response.json();
       }
+
+      const formattedData = data.map((item: any) => ({
+        ...item,
+        rects: item.width ? [{ x: item.x, y: item.y, w: item.width, h: item.height }] : [],
+        path: item.path || undefined
+      }));
+
+      setAnnotations(prev => ({
+        ...prev,
+        [fileId]: formattedData
+      }));
     } catch (error) {
       console.error('Error fetching annotations:', error);
     }
   };
 
   useEffect(() => {
+    if (state.fileName && externalAnnotations) {
+      setAnnotations(prev => ({
+        ...prev,
+        [state.fileName as string]: externalAnnotations
+      }));
+    }
+  }, [externalAnnotations, state.fileName]);
+
+  useEffect(() => {
     // Poll for changes every 5 seconds for collaboration
-    if (!state.fileName) return;
+    if (!state.fileName || externalAnnotations || (!annotationLoader && !annotationsApiUrl)) return;
     const interval = setInterval(() => {
-      fetchAnnotations(state.fileName);
+      fetchAnnotations(state.fileName || "");
     }, 5000);
     return () => clearInterval(interval);
-  }, [state.fileName]);
+  }, [state.fileName, externalAnnotations, annotationLoader, annotationsApiUrl]);
 
   useEffect(() => {
     // Collapse sidebar by default on small screens
@@ -189,7 +226,7 @@ export default function PDFViewer({
 
   const [history, setHistory] = useState<{ id: string; timestamp: number; name: string }[]>([]);
 
-  const handleAddAnnotation = async (page: number, x: number, y: number, type: AnnotationType = 'note', w?: number, h?: number, path?: { x: number; y: number }[]) => {
+  const handleAddAnnotation = async (page: number, x: number, y: number, type: AnnotationType = 'note', w?: number, h?: number, path?: { x: number; y: number }[], lineWidth?: number) => {
     if (!state.fileName) return;
 
     let content = '';
@@ -218,6 +255,7 @@ export default function PDFViewer({
         h: h || 15 
       }],
       path,
+      lineWidth: type === 'draw' ? (lineWidth ?? state.drawLineWidth) : undefined,
       content,
       author: 'User',
       createdAt: Date.now()
@@ -235,7 +273,8 @@ export default function PDFViewer({
           width: newAnnotation.rects[0].w,
           height: newAnnotation.rects[0].h,
           text: newAnnotation.content,
-          path: newAnnotation.path
+          path: newAnnotation.path,
+          lineWidth: newAnnotation.lineWidth
         })
       });
 
@@ -243,7 +282,7 @@ export default function PDFViewer({
       const updatedFileAnnotations = [...currentFileAnnotations, newAnnotation];
       
       // Save action for undo
-      setUndoStack(prev => [{ type: 'add', annotation: newAnnotation, fileId: state.fileName! }, ...prev].slice(0, 50));
+      setUndoStack(prev => [{ type: 'add' as const, annotation: newAnnotation, fileId: state.fileName! }, ...prev].slice(0, 50));
       setRedoStack([]);
 
       const updatedAllAnnotations = {
@@ -278,7 +317,7 @@ export default function PDFViewer({
       
       if (removedAnnotation) {
         // Save action for undo
-        setUndoStack(prev => [{ type: 'delete', annotation: removedAnnotation, fileId: state.fileName! }, ...prev].slice(0, 50));
+        setUndoStack(prev => [{ type: 'delete' as const, annotation: removedAnnotation, fileId: state.fileName! }, ...prev].slice(0, 50));
         setRedoStack([]);
       }
       
@@ -486,7 +525,7 @@ export default function PDFViewer({
       const currentFileAnnotations = annotations[state.fileName] || [];
       const updatedFileAnnotations = [...currentFileAnnotations, newAnnotation];
       
-      setUndoStack(prev => [{ type: 'add', annotation: newAnnotation, fileId: state.fileName! }, ...prev].slice(0, 50));
+      setUndoStack(prev => [{ type: 'add' as const, annotation: newAnnotation, fileId: state.fileName! }, ...prev].slice(0, 50));
       setRedoStack([]);
 
       const updatedAllAnnotations = {
@@ -625,7 +664,7 @@ export default function PDFViewer({
         }
         
         const pdfBytes = await pdfDoc.save();
-        const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+        const blob = new Blob([new Uint8Array(pdfBytes)], { type: 'application/pdf' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
@@ -696,7 +735,7 @@ export default function PDFViewer({
         });
 
         const buffer = await Packer.toBuffer(doc);
-        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+        const blob = new Blob([new Uint8Array(buffer)], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
@@ -772,11 +811,15 @@ export default function PDFViewer({
   };
 
   return (
-    <div className={cn(
-      "flex flex-col h-screen overflow-hidden font-sans pt-2 transition-colors duration-300",
-      state.isDarkMode ? "bg-[#0F172A] text-slate-200" : "bg-slate-50 text-slate-900",
-      className
-    )}>
+    <div
+      ref={rootRef}
+      style={{ height: height ?? '100vh', width: width ?? '100%' }}
+      className={cn(
+        "flex flex-col h-full min-h-0 overflow-hidden font-sans pt-2 transition-colors duration-300",
+        state.isDarkMode ? "bg-[#0F172A] text-slate-200" : "bg-slate-50 text-slate-900",
+        className
+      )}
+    >
       {noteDialog?.isOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
           <motion.div 
@@ -814,7 +857,7 @@ export default function PDFViewer({
               }}
               id="note-textarea"
             />
-            <div className="flex justify-between items-center text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+            <div className="flex justify-between items-center text-[12px] text-slate-500 font-bold uppercase tracking-widest">
               <span>CTRL + ENTER to Save</span>
               <button 
                 onClick={() => {
@@ -873,7 +916,7 @@ export default function PDFViewer({
                 { label: 'File Size', value: documentProps.metadata.Size, icon: FileText },
               ].map((item, idx) => (
                 <div key={idx} className="space-y-1">
-                  <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">
+                  <div className="flex items-center gap-2 text-[12px] font-bold text-slate-500 uppercase tracking-widest mb-1">
                     <item.icon size={12} className="text-blue-500/50" />
                     {item.label}
                   </div>
@@ -927,9 +970,9 @@ export default function PDFViewer({
                    handleRemoveAnnotation(contextMenu.annotationId!);
                    setContextMenu(null);
                 }}
-                className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-red-400 hover:bg-red-400/10 transition-all group"
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-400 hover:bg-red-400/10 transition-all group"
               >
-                <div className="bg-red-400/10 p-1.5 rounded-lg group-hover:bg-red-400/20 transition-colors">
+                <div className="bg-red-400/10 p-2 rounded-lg group-hover:bg-red-400/20 transition-colors">
                   <Trash2 size={14} />
                 </div>
                 <span className="font-medium">Delete Annotation</span>
@@ -942,11 +985,11 @@ export default function PDFViewer({
                      setContextMenu(null);
                   }}
                   className={cn(
-                    "w-full flex items-center gap-3 px-4 py-2.5 text-xs transition-all group",
+                    "w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-all group",
                     state.isDarkMode ? "text-slate-300 hover:bg-white/5 hover:text-white" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                   )}
                 >
-                  <div className="bg-amber-400/10 p-1.5 rounded-lg group-hover:bg-amber-400/20 transition-colors">
+                  <div className="bg-amber-400/10 p-2 rounded-lg group-hover:bg-amber-400/20 transition-colors">
                     <StickyNote size={14} className="text-amber-400" />
                   </div>
                   <span className="font-medium">Note</span>
@@ -958,12 +1001,12 @@ export default function PDFViewer({
                      setContextMenu(null);
                   }}
                   className={cn(
-                    "w-full flex items-center gap-3 px-4 py-2.5 text-xs transition-all group",
+                    "w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-all group",
                     state.isDarkMode ? "text-slate-300 hover:bg-white/5 hover:text-white" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                   )}
                 >
                   <div 
-                    className="p-1.5 rounded-lg group-hover:opacity-80 transition-opacity"
+                    className="p-2 rounded-lg group-hover:opacity-80 transition-opacity"
                     style={{ backgroundColor: `${state.highlightColor}20` }}
                   >
                     <Highlighter size={14} style={{ color: state.highlightColor }} />
@@ -977,11 +1020,11 @@ export default function PDFViewer({
                      setContextMenu(null);
                   }}
                   className={cn(
-                    "w-full flex items-center gap-3 px-4 py-2.5 text-xs transition-all group",
+                    "w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-all group",
                     state.isDarkMode ? "text-slate-300 hover:bg-white/5 hover:text-white" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                   )}
                 >
-                  <div className="bg-blue-400/10 p-1.5 rounded-lg group-hover:bg-blue-400/20 transition-colors">
+                  <div className="bg-blue-400/10 p-2 rounded-lg group-hover:bg-blue-400/20 transition-colors">
                     <Type size={14} className="text-blue-400" />
                   </div>
                   <span className="font-medium">Underline Text</span>
@@ -993,9 +1036,9 @@ export default function PDFViewer({
 
             <button 
               onClick={() => setContextMenu(null)}
-              className="w-full flex items-center gap-3 px-4 py-2 text-[10px] text-slate-500 hover:text-slate-300 transition-colors"
+              className="w-full flex items-center gap-3 px-4 py-2 text-[12px] text-slate-500 hover:text-slate-300 transition-colors"
             >
-              <div className="p-1.5">
+              <div className="p-2">
                 <X size={12} />
               </div>
               <span className="font-bold uppercase tracking-widest">Close</span>
@@ -1043,7 +1086,7 @@ export default function PDFViewer({
         isDarkMode={state.isDarkMode}
       />
 
-      <div className="flex-1 flex overflow-hidden relative">
+      <div className="flex-1 flex overflow-hidden relative min-h-0">
         {showSidebar && (
           <>
             <AnimatePresence>
@@ -1053,7 +1096,7 @@ export default function PDFViewer({
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   onClick={() => setState(prev => ({ ...prev, isSidebarOpen: false }))}
-                  className="fixed inset-0 bg-slate-950/40 backdrop-blur-[2px] z-30 md:hidden"
+                  className="absolute inset-0 bg-slate-950/40 backdrop-blur-[2px] z-30 md:hidden"
                 />
               )}
             </AnimatePresence>
@@ -1076,7 +1119,7 @@ export default function PDFViewer({
           onMouseUp={handlePanUp}
           onMouseLeave={handlePanUp}
           className={cn(
-            "flex-1 overflow-y-auto px-4 md:px-12 py-10 transition-all duration-300 custom-scrollbar",
+            "flex-1 overflow-y-auto px-4 md:px-12 py-10 transition-all duration-300 custom-scrollbar min-h-0",
             state.isDarkMode ? "bg-slate-950/50" : "bg-slate-200/50",
             state.isSidebarOpen ? "md:ml-56" : "ml-0",
             state.activeTool === 'hand' ? (isPanning ? "cursor-grabbing" : "cursor-grab") : "cursor-default"
@@ -1102,12 +1145,12 @@ export default function PDFViewer({
                   <FileUp size={40} className="text-white" />
                 </div>
                 <h3 className={cn("text-2xl font-bold mb-3 tracking-tight", state.isDarkMode ? "text-white" : "text-slate-900")}>NexGen Viewer</h3>
-                <p className="text-slate-400 text-xs leading-relaxed mb-8 px-4 uppercase tracking-widest font-medium opacity-60">
+                <p className="text-slate-400 text-sm leading-relaxed mb-8 px-4 uppercase tracking-widest font-medium opacity-60">
                    Symmetrical Document Management & Real-time Annotations
                 </p>
                 <button 
                   onClick={() => fileInputRef.current?.click()}
-                  className="w-full bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-2xl font-bold transition-all shadow-xl shadow-blue-600/20 active:scale-95 text-xs uppercase tracking-widest"
+                  className="w-full bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-2xl font-bold transition-all shadow-xl shadow-blue-600/20 active:scale-95 text-sm uppercase tracking-widest"
                 >
                   Load PDF Database
                 </button>
@@ -1118,7 +1161,7 @@ export default function PDFViewer({
           {loading && (
             <div className="h-full flex flex-col items-center justify-center gap-6">
               <div className="w-16 h-16 border-4 border-slate-800 border-t-blue-500 rounded-full animate-spin" />
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em]">Decoding Manifest</p>
+              <p className="text-[12px] font-bold text-slate-500 uppercase tracking-[0.3em]">Decoding Manifest</p>
             </div>
           )}
 
@@ -1141,7 +1184,8 @@ export default function PDFViewer({
                       annotations={currentAnnotations}
                       activeTool={state.activeTool}
                       highlightColor={state.highlightColor}
-                      onAddAnnotation={(p, x, y, w, h, t, pt) => handleAddAnnotation(p, x, y, t || (state.activeTool === 'view' ? 'note' : state.activeTool as any), w, h, pt)}
+                      drawLineWidth={state.drawLineWidth}
+                      onAddAnnotation={(p, x, y, w, h, t, pt, lw) => handleAddAnnotation(p, x, y, t || (state.activeTool === 'view' ? 'note' : state.activeTool as any), w, h, pt, lw)}
                       onPageVisible={(p) => {
                         if (state.currentPage !== p) {
                           handleStateChange({ currentPage: p });
@@ -1164,7 +1208,8 @@ export default function PDFViewer({
                     annotations={currentAnnotations}
                     activeTool={state.activeTool}
                     highlightColor={state.highlightColor}
-                    onAddAnnotation={(p, x, y, w, h, t, pt) => handleAddAnnotation(p, x, y, t || (state.activeTool === 'view' ? 'note' : state.activeTool as any), w, h, pt)}
+                    drawLineWidth={state.drawLineWidth}
+                    onAddAnnotation={(p, x, y, w, h, t, pt, lw) => handleAddAnnotation(p, x, y, t || (state.activeTool === 'view' ? 'note' : state.activeTool as any), w, h, pt, lw)}
                     onPageVisible={() => {}}
                     onRemoveAnnotation={handleRemoveAnnotation}
                     onContextMenu={handleContextMenu}
@@ -1186,7 +1231,8 @@ export default function PDFViewer({
                           annotations={currentAnnotations}
                           activeTool={state.activeTool}
                           highlightColor={state.highlightColor}
-                          onAddAnnotation={(p, x, y, w, h, t, pt) => handleAddAnnotation(p, x, y, t || (state.activeTool === 'view' ? 'note' : state.activeTool as any), w, h, pt)}
+                          drawLineWidth={state.drawLineWidth}
+                          onAddAnnotation={(p, x, y, w, h, t, pt, lw) => handleAddAnnotation(p, x, y, t || (state.activeTool === 'view' ? 'note' : state.activeTool as any), w, h, pt, lw)}
                           onPageVisible={(p) => {
                             if (state.viewMode === 'double') {
                               const rowStart = Math.floor((p - 1) / 2) * 2 + 1;
@@ -1216,7 +1262,8 @@ export default function PDFViewer({
                           annotations={currentAnnotations}
                           activeTool={state.activeTool}
                           highlightColor={state.highlightColor}
-                          onAddAnnotation={(p, x, y, w, h, t, pt) => handleAddAnnotation(p, x, y, t || (state.activeTool === 'view' ? 'note' : state.activeTool as any), w, h, pt)}
+                          drawLineWidth={state.drawLineWidth}
+                          onAddAnnotation={(p, x, y, w, h, t, pt, lw) => handleAddAnnotation(p, x, y, t || (state.activeTool === 'view' ? 'note' : state.activeTool as any), w, h, pt, lw)}
                           onPageVisible={(p) => {
                             if (state.viewMode === 'double') {
                               const rowStart = Math.floor((p - 1) / 2) * 2 + 1;
@@ -1243,17 +1290,17 @@ export default function PDFViewer({
       </div>
 
       <footer className={cn(
-        "h-10 border-t px-6 flex items-center justify-between text-[10px] font-bold uppercase tracking-widest overflow-hidden transition-colors duration-300",
+        "h-10 border-t px-6 flex items-center justify-between text-[12px] font-bold uppercase tracking-widest overflow-hidden transition-colors duration-300",
         state.isDarkMode ? "bg-[#1E293B] border-slate-700/50 text-slate-500" : "bg-white border-slate-200 text-slate-400"
       )}>
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-            <span className={cn("tracking-tighter", state.isDarkMode ? "text-slate-300" : "text-slate-600")}>ProPDF Core v1.0</span>
+            <span className={cn("tracking-wider", state.isDarkMode ? "text-slate-300" : "text-slate-600")}>Powered by NexGenPDF</span> <span className={cn("ml-1 text-xs", state.isDarkMode ? "text-slate-500" : "text-slate-400")}>v{version}</span>
           </div>
         </div>
         <div className="flex items-center gap-6">
-          <div className={cn("font-mono tracking-tighter", state.isDarkMode ? "text-slate-400" : "text-slate-500")}>Current Session: {new Date().toLocaleDateString()}</div>
+          <div className={cn("font-mono ", state.isDarkMode ? "text-slate-400" : "text-slate-500")}>Current Session: {new Date().toLocaleDateString()}</div>
         </div>
       </footer>
     </div>

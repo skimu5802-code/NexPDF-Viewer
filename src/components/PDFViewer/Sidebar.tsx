@@ -64,7 +64,7 @@ const OutlineRenderer: React.FC<{
             <button 
               onClick={() => onSelect(item.dest)}
               className={cn(
-                "flex-1 text-left py-1 text-[11px] transition-colors truncate",
+                "flex-1 text-left py-1 text-sm transition-colors truncate",
                 state.isDarkMode ? "text-slate-400 hover:text-white" : "text-slate-600 hover:text-slate-900",
                 item.bold && "font-bold",
                 item.italic && "italic"
@@ -194,7 +194,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const handleAttachmentDownload = (att: AttachmentItem) => {
-    const blob = new Blob([att.content]);
+    const blob = new Blob([new Uint8Array(att.content)], { type: 'application/octet-stream' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -212,7 +212,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           exit={{ x: -256 }}
           transition={{ type: 'spring', damping: 30, stiffness: 300 }}
           className={cn(
-            "w-56 h-full border-r flex flex-col z-40 fixed left-0 shadow-2xl transition-colors duration-300",
+            "w-56 h-full border-r flex flex-col z-40 absolute left-0 top-0 shadow-2xl transition-colors duration-300",
             state.isDarkMode ? "bg-slate-900 border-slate-700/50" : "bg-white border-slate-200"
           )}
         >
@@ -239,7 +239,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 )}
               >
                 <Icon size={14} />
-                <span className="text-[8px] font-bold uppercase tracking-tighter">{label}</span>
+                <span className="text-[12px] font-bold uppercase tracking-tighter">{label}</span>
                 {activeTab === id && (
                   <motion.div 
                     layoutId="activeTabUnderline"
@@ -266,7 +266,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       state={state}
                     />
                     <span className={cn(
-                      "block text-center mt-2 text-[10px] font-bold tracking-tight",
+                      "block text-center mt-2 text-sm font-bold tracking-tight",
                       state.currentPage === pageNum ? "text-blue-500" : (state.isDarkMode ? "text-slate-500" : "text-slate-400")
                     )}>
                       Page {pageNum}
@@ -281,7 +281,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 {outline.length === 0 ? (
                   <div className="text-center py-12">
                     <List size={24} className="mx-auto text-slate-700 mb-2 opacity-50" />
-                    <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">No Outline</p>
+                    <p className="text-sm text-slate-500 uppercase font-bold tracking-widest">No Outline</p>
                   </div>
                 ) : (
                   <OutlineRenderer items={outline} pdfDoc={pdfDoc} onSelect={handleOutlineSelect} state={state} />
@@ -294,7 +294,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 {attachments.length === 0 ? (
                   <div className="text-center py-12">
                     <Paperclip size={24} className="mx-auto text-slate-700 mb-2 opacity-50" />
-                    <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">No Attachments</p>
+                    <p className="text-sm text-slate-500 uppercase font-bold tracking-widest">No Attachments</p>
                   </div>
                 ) : (
                   attachments.map((att, idx) => (
@@ -309,7 +309,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       <button 
                         onClick={() => handleAttachmentDownload(att)}
                         className={cn(
-                          "p-1.5 rounded transition-colors",
+                          "p-2 rounded transition-colors",
                           state.isDarkMode ? "hover:bg-slate-700 text-slate-400 hover:text-blue-400" : "hover:bg-white text-slate-400 hover:text-blue-600 shadow-sm"
                         )}
                         title="Download Attachment"
@@ -327,7 +327,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 {annotations.length === 0 ? (
                   <div className="text-center py-12">
                     <MessageSquare size={24} className={cn("mx-auto mb-2 opacity-50", state.isDarkMode ? "text-slate-700" : "text-slate-200")} />
-                    <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Empty</p>
+                    <p className="text-[12px] text-slate-500 uppercase font-bold tracking-widest">Empty</p>
                   </div>
                 ) : (
                   annotations.map((ann) => (
@@ -354,8 +354,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     state.isDarkMode ? "border-slate-700" : "border-slate-200"
                   )}>
                     <div className="flex-1">
-                      <p className={cn("text-[11px] font-medium", state.isDarkMode ? "text-slate-300" : "text-slate-700")}>{entry.name}</p>
-                      <p className="text-[9px] text-slate-400 font-mono tracking-tighter">{new Date(entry.timestamp).toLocaleTimeString()}</p>
+                      <p className={cn("text-sm font-medium", state.isDarkMode ? "text-slate-300" : "text-slate-700")}>{entry.name}</p>
+                      <p className="text-sm text-slate-400 font-mono tracking-tighter">{new Date(entry.timestamp).toLocaleTimeString()}</p>
                     </div>
                   </div>
                 ))}
@@ -368,7 +368,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   "p-4 rounded-xl border transition-colors",
                   state.isDarkMode ? "bg-slate-800/50 border-slate-700/50" : "bg-slate-50 border-slate-200"
                 )}>
-                  <h4 className="text-[10px] font-bold text-blue-500 mb-3 uppercase tracking-widest">Persistence</h4>
+                  <h4 className="text-sm font-bold text-blue-500 mb-3 uppercase tracking-widest">Persistence</h4>
                   <div className="space-y-2">
                     <button 
                       onClick={() => onCloudSync('drive')}
@@ -377,7 +377,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         state.isDarkMode ? "bg-slate-800 hover:bg-slate-700 border-slate-700" : "bg-white hover:bg-blue-50 border-slate-200"
                       )}
                     >
-                      <span className={cn("text-[11px] font-semibold", state.isDarkMode ? "text-slate-300" : "text-slate-700")}>Google Drive</span>
+                      <span className={cn("text-sm font-semibold", state.isDarkMode ? "text-slate-300" : "text-slate-700")}>Google Drive</span>
                       <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full group-hover:scale-125 transition-transform" />
                     </button>
                     <button 
@@ -387,7 +387,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         state.isDarkMode ? "bg-slate-800 hover:bg-slate-700 border-slate-700" : "bg-white hover:bg-blue-50 border-slate-200"
                       )}
                     >
-                      <span className={cn("text-[11px] font-semibold", state.isDarkMode ? "text-slate-300" : "text-slate-700")}>Dropbox</span>
+                      <span className={cn("text-sm font-semibold", state.isDarkMode ? "text-slate-300" : "text-slate-700")}>Dropbox</span>
                       <div className="w-1.5 h-1.5 bg-slate-400 rounded-full" />
                     </button>
                   </div>

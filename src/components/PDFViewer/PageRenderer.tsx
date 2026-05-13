@@ -20,7 +20,8 @@ interface PageRendererProps {
   annotations: Annotation[];
   activeTool: string;
   highlightColor: string;
-  onAddAnnotation: (page: number, x: number, y: number, w?: number, h?: number, type?: AnnotationType, path?: { x: number; y: number }[]) => void;
+  drawLineWidth: number;
+  onAddAnnotation: (page: number, x: number, y: number, w?: number, h?: number, type?: AnnotationType, path?: { x: number; y: number }[], lineWidth?: number) => void;
   onRemoveAnnotation: (id: string) => void;
   onContextMenu: (e: React.MouseEvent, page: number, x: number, y: number, annotationId?: string) => void;
   onPageVisible: (page: number) => void;
@@ -36,6 +37,7 @@ export const PageRenderer: React.FC<PageRendererProps> = ({
   annotations,
   activeTool,
   highlightColor,
+  drawLineWidth,
   onAddAnnotation,
   onRemoveAnnotation,
   onContextMenu,
@@ -74,6 +76,9 @@ export const PageRenderer: React.FC<PageRendererProps> = ({
         if (context) {
           context.setTransform(1, 0, 0, 1, 0, 0);
           context.scale(dpr, dpr);
+          // Fill background with white before rendering PDF
+          context.fillStyle = '#FFFFFF';
+          context.fillRect(0, 0, viewport.width, viewport.height);
         }
 
         const renderTask = page.render({
@@ -182,7 +187,7 @@ export const PageRenderer: React.FC<PageRendererProps> = ({
         const minY = Math.min(...currentPath.map(p => p.y));
         const maxY = Math.max(...currentPath.map(p => p.y));
         
-        onAddAnnotation(pageNumber, minX, minY, maxX - minX, maxY - minY, 'draw', currentPath);
+        onAddAnnotation(pageNumber, minX, minY, maxX - minX, maxY - minY, 'draw', currentPath, drawLineWidth);
       }
       setCurrentPath([]);
       return;
@@ -219,7 +224,8 @@ export const PageRenderer: React.FC<PageRendererProps> = ({
       className="flex flex-col items-center mb-16 px-4"
     >
       <motion.div 
-        className="relative group shadow-2xl origin-top will-change-transform"
+        className="relative group shadow-2xl origin-top will-change-transform overflow-visible"
+        style={{ overflow: 'visible' }}
         animate={{ scale: visualScale }}
         transition={{ 
           type: "spring",
@@ -236,7 +242,7 @@ export const PageRenderer: React.FC<PageRendererProps> = ({
           onMouseUp={handleMouseUp}
           onContextMenu={handleContextMenuInternal}
           className={cn(
-            "bg-white rounded-sm",
+            "bg-white rounded-sm block",
             activeTool === 'view' ? "cursor-default" : 
             activeTool === 'note' ? "cursor-text" : "cursor-crosshair",
             isActive ? "shadow-[0_0_50px_rgba(59,130,246,0.1)]" : "shadow-none"
@@ -276,7 +282,7 @@ export const PageRenderer: React.FC<PageRendererProps> = ({
                        points={ann.path.map(p => `${p.x * zoom},${p.y * zoom}`).join(' ')}
                        fill="none"
                        stroke={ann.color}
-                       strokeWidth="2"
+                       strokeWidth={ann.lineWidth || 2}
                        strokeLinecap="round"
                        strokeLinejoin="round"
                      />
@@ -286,7 +292,7 @@ export const PageRenderer: React.FC<PageRendererProps> = ({
                     className="absolute bg-slate-900 text-white p-1 rounded shadow-lg opacity-0 group-hover/ann:opacity-100 transition-all whitespace-nowrap flex items-center gap-1 z-30 pointer-events-auto -translate-y-full"
                     style={{ left: (rect.x * zoom), top: (rect.y * zoom) }}
                   >
-                    <Trash2 size={10} className="text-red-400" />
+                    <Trash2 size={12} className="text-red-400" />
                   </button>
                  </div>
                );
@@ -305,7 +311,7 @@ export const PageRenderer: React.FC<PageRendererProps> = ({
                  >
                    <motion.div 
                     whileHover={{ scale: 1.1 }}
-                    className="bg-amber-400 p-1.5 rounded-full shadow-lg"
+                    className="bg-amber-400 p-2 rounded-full shadow-lg"
                    >
                      <MessageSquare size={14} className="text-amber-900" />
                    </motion.div>
@@ -314,7 +320,7 @@ export const PageRenderer: React.FC<PageRendererProps> = ({
                      isLeftSide ? "left-0 translate-x-0" : isRightSide ? "right-0 translate-x-0" : "left-1/2 -translate-x-1/2"
                    )}>
                      <div className={cn(
-                        "p-4 rounded-xl shadow-2xl text-xs border transition-colors",
+                        "p-4 rounded-xl shadow-2xl text-sm border transition-colors",
                         isDarkMode ? "bg-slate-900 border-slate-700" : "bg-white border-slate-200"
                       )}>
                        <div className={cn("flex justify-between items-center mb-2 border-b pb-2", isDarkMode ? "border-slate-800" : "border-slate-100")}>
@@ -326,7 +332,7 @@ export const PageRenderer: React.FC<PageRendererProps> = ({
                                isDarkMode ? "text-slate-500 hover:text-red-400 hover:bg-red-400/10" : "text-slate-400 hover:text-red-600 hover:bg-red-50"
                              )}
                           >
-                            <Trash2 size={10} />
+                            <Trash2 size={12} />
                           </button>
                        </div>
                        <p className="text-slate-300 leading-relaxed font-medium">{ann.content}</p>
@@ -358,7 +364,7 @@ export const PageRenderer: React.FC<PageRendererProps> = ({
                     onClick={() => onRemoveAnnotation(ann.id)}
                     className="absolute -top-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white p-1 rounded shadow-lg opacity-0 group-hover/ann:opacity-100 transition-opacity whitespace-nowrap flex items-center gap-1 z-30 pointer-events-auto"
                   >
-                    <Trash2 size={10} className="text-red-400" />
+                    <Trash2 size={12} className="text-red-400" />
                     <span className="text-[8px] uppercase tracking-tighter">Delete</span>
                   </button>
                 </motion.div>
@@ -374,7 +380,7 @@ export const PageRenderer: React.FC<PageRendererProps> = ({
                     points={currentPath.map(p => `${p.x * zoom},${p.y * zoom}`).join(' ')}
                     fill="none"
                     stroke={highlightColor}
-                    strokeWidth="2"
+                    strokeWidth={drawLineWidth}
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   />

@@ -8,15 +8,20 @@
 }
 
 @layer base {
+  /* Container Query Support */
+  .toolbar-container {
+    container-type: inline-size;
+  }
+
   .custom-scrollbar::-webkit-scrollbar {
     width: 6px;
     height: 6px;
   }
-  
+
   .custom-scrollbar::-webkit-scrollbar-track {
     @apply bg-transparent;
   }
-  
+
   .custom-scrollbar::-webkit-scrollbar-thumb {
     @apply bg-slate-700 rounded-full hover:bg-slate-600 transition-colors;
   }
@@ -24,12 +29,52 @@
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }
+
   .no-scrollbar {
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+}
 
-  body {
-    @apply antialiased font-sans transition-colors duration-300 bg-[#0F172A] text-slate-200;
+@layer components {
+  /* Container Query Responsive Classes - Adjusted for better UX */
+  @container (max-width: 500px) {
+    .cq-hide-sm { @apply hidden; }
+    .cq-show-sm { @apply block; }
+  }
+
+  @container (min-width: 501px) {
+    .cq-hide-sm { @apply block; }
+    .cq-show-sm { @apply hidden; }
+  }
+
+  @container (max-width: 700px) {
+    .cq-hide-md { @apply hidden; }
+    .cq-show-md { @apply block; }
+  }
+
+  @container (min-width: 701px) {
+    .cq-hide-md { @apply block; }
+    .cq-show-md { @apply hidden; }
+  }
+
+  @container (max-width: 900px) {
+    .cq-hide-lg { @apply hidden; }
+    .cq-show-lg { @apply block; }
+  }
+
+  @container (min-width: 901px) {
+    .cq-hide-lg { @apply block; }
+    .cq-show-lg { @apply hidden; }
+  }
+
+  @container (max-width: 1100px) {
+    .cq-hide-xl { @apply hidden; }
+    .cq-show-xl { @apply block; }
+  }
+
+  @container (min-width: 1101px) {
+    .cq-hide-xl { @apply block; }
+    .cq-show-xl { @apply hidden; }
   }
 }
