@@ -23,6 +23,11 @@ export default function PDFViewer({
   showToolbar = true,
   showSidebar = true,
   searchEnabled = true,
+  annotationsEnabled = true,
+  zoomEnabled = true,
+  rotateEnabled = true,
+  printEnabled = true,
+  downloadEnabled = true,
   theme,
   externalAnnotations,
   annotationsApiUrl,
@@ -1068,10 +1073,17 @@ export default function PDFViewer({
           onShowInfo={handleShowInfo}
           allowUpload={allowUpload}
           searchEnabled={searchEnabled}
+          annotationsEnabled={annotationsEnabled}
+          zoomEnabled={zoomEnabled}
+          rotateEnabled={rotateEnabled}
+          printEnabled={printEnabled}
+          downloadEnabled={downloadEnabled}
           canUndo={undoStack.length > 0}
           canRedo={redoStack.length > 0}
           onUndo={handleUndo}
           onRedo={handleRedo}
+          showSidebar={showSidebar}
+          showToolbar={showToolbar}
         />
       )}
 

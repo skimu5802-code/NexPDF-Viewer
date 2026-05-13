@@ -23,10 +23,17 @@ interface ToolbarProps {
   onShowInfo: () => void;
   allowUpload?: boolean;
   searchEnabled?: boolean;
+  annotationsEnabled?: boolean;
+  zoomEnabled?: boolean;
+  rotateEnabled?: boolean;
+  printEnabled?: boolean;
+  downloadEnabled?: boolean;
+  showSidebar?: boolean;
   canUndo?: boolean;
   canRedo?: boolean;
   onUndo?: () => void;
   onRedo?: () => void;
+  showToolbar: boolean;
 }
 
 export const Toolbar: React.FC<ToolbarProps> = ({ 
@@ -41,6 +48,12 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   onShowInfo,
   allowUpload = true,
   searchEnabled = true,
+  annotationsEnabled = true,
+  zoomEnabled = true,
+  rotateEnabled = true,
+  printEnabled = true,
+  downloadEnabled = true,
+  showSidebar = true,
   canUndo = false,
   canRedo = false,
   onUndo,
@@ -135,13 +148,14 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     let available = Math.max(0, toolbarWidth - reserved);
 
     const display = {
-      annotation: true,
-      zoom: true,
+      annotation: annotationsEnabled,
+      zoom: zoomEnabled,
       viewActions: true,
       upload: allowUpload,
       search: searchEnabled,
-      rotate: true,
-      print: true,
+      rotate: rotateEnabled,
+      print: printEnabled,
+      download: downloadEnabled,
     };
 
     if (available < widths.upload) {
@@ -167,7 +181,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     }
 
     return display;
-  }, [toolbarWidth, groupWidths, allowUpload, searchEnabled]);
+  }, [toolbarWidth, groupWidths, allowUpload, searchEnabled, annotationsEnabled, zoomEnabled, rotateEnabled, printEnabled, downloadEnabled]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -240,18 +254,20 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           "flex items-center gap-1 p-1 rounded-lg border",
           state.isDarkMode ? "bg-slate-800 border-slate-700/50" : "bg-slate-100 border-slate-200"
         )}>
-          <button 
-            onClick={() => onStateChange({ isSidebarOpen: !state.isSidebarOpen })}
-            className={cn(
-              "p-2 rounded transition-all active:scale-95",
-              state.isSidebarOpen 
-                ? (state.isDarkMode ? "bg-blue-600/20 text-blue-400" : "bg-white text-blue-600 shadow-sm") 
-                : (state.isDarkMode ? "hover:bg-slate-700 text-slate-400" : "hover:bg-slate-200 text-slate-500")
-            )}
-            title="Toggle Sidebar"
-          >
-            <Sidebar size={18} />
-          </button>
+          {showSidebar && (
+            <button 
+              onClick={() => onStateChange({ isSidebarOpen: !state.isSidebarOpen })}
+              className={cn(
+                "p-2 rounded transition-all active:scale-95",
+                state.isSidebarOpen 
+                  ? (state.isDarkMode ? "bg-blue-600/20 text-blue-400" : "bg-white text-blue-600 shadow-sm") 
+                  : (state.isDarkMode ? "hover:bg-slate-700 text-slate-400" : "hover:bg-slate-200 text-slate-500")
+              )}
+              title="Toggle Sidebar"
+            >
+              <Sidebar size={18} />
+            </button>
+          )}
 
           <button 
             onClick={() => onStateChange({ isDarkMode: !state.isDarkMode })}
@@ -694,9 +710,9 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         </div>
 
         <div className="hidden cq-xl:flex items-center gap-0.5">
-          <button onClick={() => onStateChange({ rotation: (state.rotation + 90) % 360 })} className={cn("p-2 rounded hover:bg-slate-100 hidden cq-lg:block", state.isDarkMode ? "hover:bg-slate-700 text-slate-400" : "text-slate-500")} title="Rotate"><RotateCw size={18} /></button>
-          <button onClick={onPrint} className={cn("p-2 rounded hover:bg-slate-100 hidden cq-lg:block", state.isDarkMode ? "hover:bg-slate-700 text-slate-400" : "text-slate-500")} title="Print"><Printer size={18} /></button>
-          <div className="relative" ref={downloadMenuRef}>
+          {rotateEnabled && <button onClick={() => onStateChange({ rotation: (state.rotation + 90) % 360 })} className={cn("p-2 rounded hover:bg-slate-100 hidden cq-lg:block", state.isDarkMode ? "hover:bg-slate-700 text-slate-400" : "text-slate-500")} title="Rotate"><RotateCw size={18} /></button>}
+          {printEnabled && <button onClick={onPrint} className={cn("p-2 rounded hover:bg-slate-100 hidden cq-lg:block", state.isDarkMode ? "hover:bg-slate-700 text-slate-400" : "text-slate-500")} title="Print"><Printer size={18} /></button>}
+          {downloadEnabled && <div className="relative" ref={downloadMenuRef}>
             <button 
               onClick={() => setIsDownloadMenuOpen(!isDownloadMenuOpen)} 
               className={cn("p-2 rounded hover:bg-slate-100 transition-all", state.isDarkMode ? "hover:bg-slate-700 text-slate-400" : "text-slate-500")} 
@@ -752,7 +768,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 </motion.div>
               )}
             </AnimatePresence>
-          </div>
+          </div>}
           {searchEnabled && <button onClick={onSearchToggle} className={cn("p-2 rounded hover:bg-slate-100 hidden cq-lg:block", state.isDarkMode ? "hover:bg-slate-700 text-slate-400" : "text-slate-500")} title="Search"><Search size={18} /></button>}
         </div>
 

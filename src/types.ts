@@ -29,6 +29,11 @@ export interface PDFViewerProps {
   showToolbar?: boolean;
   showSidebar?: boolean;
   searchEnabled?: boolean;
+  annotationsEnabled?: boolean;
+  zoomEnabled?: boolean;
+  rotateEnabled?: boolean;
+  printEnabled?: boolean;
+  downloadEnabled?: boolean;
   theme?: PDFViewerTheme;
   externalAnnotations?: Annotation[];
   annotationsApiUrl?: string;

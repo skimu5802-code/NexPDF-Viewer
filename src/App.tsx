@@ -14,6 +14,11 @@ export default function App() {
         showToolbar={true}
         showSidebar={true}
         searchEnabled={true}
+        annotationsEnabled={true}
+        zoomEnabled={true}
+        rotateEnabled={true}
+        printEnabled={true}
+        downloadEnabled={true}
         onPageChange={(page) => console.log(`Navigated to page: ${page}`)}
       />
     </div>

@@ -1,6 +1,6 @@
 # NexGen PDF Viewer Pro
 
-Latest release: **v1.0.7** — improved parent-width responsive toolbar, smarter annotation controls, and better draw tool sizing.
+Latest release: **v1.0.8** — improved parent-width responsive toolbar, smarter annotation controls, and better draw tool sizing.
 
 A professional, high-performance PDF viewer component for React projects. Built with performance and flexibility in mind.
 

@@ -1,7 +1,7 @@
 {
   "name": "nexgen-pdf-viewer",
   "private": false,
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "A professional, high-performance PDF viewer component for React projects. Built with performance and flexibility in mind.",
   "type": "module",
   "sideEffects": [

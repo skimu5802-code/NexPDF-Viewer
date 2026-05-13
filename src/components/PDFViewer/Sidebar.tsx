@@ -147,6 +147,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [activeTab, setActiveTab] = React.useState<'thumbnails' | 'outline' | 'attachments' | 'annotations' | 'history' | 'cloud'>('thumbnails');
   const [outline, setOutline] = React.useState<OutlineItem[]>([]);
   const [attachments, setAttachments] = React.useState<AttachmentItem[]>([]);
+  const thumbnailsRef = React.useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to active page thumbnail when currentPage changes or when switching to thumbnails tab
+  React.useEffect(() => {
+    if (activeTab === 'thumbnails' && thumbnailsRef.current && state.currentPage > 0) {
+      // Small delay to ensure thumbnails are rendered
+      const timer = setTimeout(() => {
+        const activeThumbnail = thumbnailsRef.current?.querySelector(`[data-page="${state.currentPage}"]`) as HTMLElement;
+        if (activeThumbnail) {
+          activeThumbnail.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center'
+          });
+        }
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [state.currentPage, activeTab, state.numPages]);
 
   React.useEffect(() => {
     const fetchOutline = async () => {
@@ -252,10 +270,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
             {activeTab === 'thumbnails' && (
-              <div className="space-y-6">
+              <div ref={thumbnailsRef} className="space-y-6">
                 {Array.from({ length: state.numPages }, (_, i) => i + 1).map((pageNum) => (
                   <button
                     key={pageNum}
+                    data-page={pageNum}
                     onClick={() => onPageSelect(pageNum)}
                     className="w-full group"
                   >
